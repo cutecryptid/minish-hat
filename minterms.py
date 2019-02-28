@@ -60,12 +60,12 @@ def implicates_dict_rules(impdict):
             elif v == "n":
                 head += [ str(kk) ]
             elif v == "1":
-                head += [ "({0} v not {0})".format(str(kk)) ]
+                head += [ "{0} v not {0}".format(str(kk)) ]
         term = [ ]
         if len(head) > 0:
-            term += [ ", ".join(head) ]
+            term += [ " v ".join(head) ]
         if len(body) > 0:
-            term += [ ", ".join(body) ]
+            term += [ " ^ ".join(body) ]
         terms += [ " :- ".join(term) + "." ]
     return "\n".join(terms)
 
