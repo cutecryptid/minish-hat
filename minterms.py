@@ -41,7 +41,13 @@ def implicates_dict_str(impdict):
     for i,k in enumerate(impdict.keys()):
         ret += "[{0}] {1}: ".format(i,k)
         for kk in sorted(impdict[k]):
-            ret += str(impdict[k][kk])
+            val = str(impdict[k][kk])
+            if val == "n":
+                ret += "'2"
+            elif val == "p":
+                ret += "'0"
+            else:
+                ret += val
         ret += "\n"
     return ret
 
@@ -91,7 +97,7 @@ def solve_iter(asp_program, asp_facts):
 
     t, ret = 0, []
     c.ground([("base", [])])
-    while True:
+    while t < 3:
         c.ground([("step", [t])])
         c.ground([("check", [t])])
         c.release_external(clingo.Function("query", [t-1]))
@@ -110,7 +116,7 @@ def main():
     parser = argparse.ArgumentParser(description='Minterm reduction with ASP')
     parser.add_argument('input_sample', metavar='I', type=str,
                         help='route for the minterm text file')
-    parser.add_argument('-m','--minmode', default="triplet",
+    parser.add_argument('-m','--minmode', default="none",
                     choices=['atoms', 'terms', 'atoms-terms', 'subset', 'triplet'],
                     help='formulae minimization method')
     args = parser.parse_args()
@@ -133,7 +139,10 @@ def main():
     if any(sym.name == "fullcover" for sym in mincover_syms):
         finaldicts += [ essndict ]
     else:
-        petrick_solutions = solve("petrick", [mincover_facts], ["0"])
+        if args.minmode == "none":
+            petrick_solutions = solve("petrick", [mincover_facts], [])
+        else:
+            petrick_solutions = solve("petrick", [mincover_facts], ["0"])
         for idx,petrick_syms in enumerate(petrick_solutions):
             petrick_facts = symbols_to_facts(petrick_syms)
             if any(sym.name == "selectimplid" for sym in petrick_syms):
@@ -147,7 +156,7 @@ def main():
     # If more than one possible solution, obtain minimal formulae
     # Depends on the specified minimization mode, some of them require an asprin call
     if len(finaldicts) == 1:
-        print("MINIMIZED RULES")
+        print("OBTAINED RULES")
         print(implicates_dict_rules(finaldicts[0]))
     else:
         optmode, asprin, minimal_solutions = "", False, []

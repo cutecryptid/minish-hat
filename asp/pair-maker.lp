@@ -18,8 +18,9 @@ holds(m((X,Y),A,V), t) :- vadj(X,Y,_,_,t-1), holds(m(X,A,V),t-1), holds(m(Y,A,V)
 id(X) :- holds(m(X,A,V),t).
 adj(X,Y,t) :- id(X), id(Y), X<Y, #count{A: holds(m(X,A,V),t), holds(m(Y,A,W),t), V!=W }=1.
 vadj(X,Y,A,P,t) :- adj(X,Y,t), holds(m(X,A,V),t), holds(m(Y,A,W),t), pair(V,W,P).
-mark(Y) :- vadj(X,Y,A,P,t), P != x.
-mark(X) :- vadj(X,Y,A,P,t), P == x.
+
+mark(X) :- vadj(X,_,_,P,t), holds(m(X,_,1), t).
+mark(Y) :- vadj(_,Y,_,P,t), holds(m(Y,_,1), t).
 mark(Z) :- vadj(X,Y,A,P,t-1), P == x, covers((X,Y),Z,t).
 
 covers((X,Y), X, 1) :- id((X,Y)).
@@ -38,6 +39,13 @@ uprimplid(X) :- primplid(X), not primplequal(X, _), not primplequal(_, X).
 uprimplid(X) :- primplequal(X, _).
 uprimpl(X, A, V) :- primpl(X, A, V), uprimplid(X).
 uprimplcvr(X, Z) :- uprimplid(X), primplcvr(X, Z).
+uprimplcvr(X, B) :- uprimplcvr(X, A), subtotal(A, B).
+
+partial(X) :- m(X, A, 1).
+total(X) :- id(X), not partial(X).
+
+subtotal(X, Y) :- total(X), partial(Y), 0=#count{ A: m(X, A, V), m(Y, A, W), V!=2, V!=W },
+                      0=#count{ A: m(X, A, 2), m(Y, A, 0) }.
 
 :- query(t), adj(X,Y,t).
 

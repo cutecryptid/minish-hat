@@ -1,0 +1,1 @@
+solution(0). sol(impl(0,p,0), 0). sol(impl(0,q,0), 0). sol(impl(8,p,2), 0). sol(impl(8,q,2), 0). solution(1). sol(impl(0,p,0), 1). sol(impl(0,q,0), 1). sol(impl((7,8),p,2), 1). sol(impl((7,8),q,p), 1). 
