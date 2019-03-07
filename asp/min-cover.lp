@@ -34,7 +34,7 @@ essnimplcvr(X, Z) :- essnimplid(X,t), pimplcvr(X, Z,t).
 essnimpl(X, A, V) :- essnimplid(X,t), uprimpl(X, A, V).
 
 leftimplid(X) :- pimplid(X,t), not essnimplid(X,t), query(t).
-leftimplcvr(X, Z) :- leftimplid(X), pimplcvr(X, Z, t), query(t).
+leftimplcvr(X, Z) :- leftimplid(X), pimplcvr(X, Z, t), not usedminid(Z,t), query(t).
 leftimpl(X, A, V) :- leftimplid(X), uprimpl(X, A, V).
 
 #show fullcover/1.
