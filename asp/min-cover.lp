@@ -8,8 +8,9 @@ pimplcvr(X, Z, 0) :- uprimplcvr(X, Z).
 
 %% t > 0
 #program step(t).
-pimplid(X, t) :- pimplid(X, t-1), not essnimplid(X, t-1), not discardimplid(X, t-1).
-pimplcvr(X, Z, t) :- uprimplcvr(X, Z), pimplid(X, t).
+pimplid(X, t) :- pimplid(X, t-1), not essnimplid(X, t-1).
+%% Fix pimplcvr to only cover present minids
+pimplcvr(X, Z, t) :- uprimplcvr(X, Z), pimplid(X, t), minid(Z,t).
 minid(Z, t) :- minid(Z, t-1), not usedminid(Z, t-1).
 
 %% t >= 0
@@ -21,7 +22,7 @@ usedminid(Z, t) :- usedminid(Z, t-1).
 discardimplid(X, t) :- pimplcvr(X, Z, t), usedminid(Z, t).
 discardimplid(X, t) :- discardimplid(X, t-1).
 
-:- query(t), essnimplid(X, t).
+:- query(t), essnimplid(X, t-1).
 
 discardimplid(X) :- discardimplid(X, t).
 
@@ -29,15 +30,16 @@ uncover(t) :-  uprimplid(X), not discardimplid(X, t).
 fullcover(t) :- not uncover(t), query(t).
 
 essnimplid(X) :- essnimplid(X, t).
-essnimplcvr(X, Z) :- essnimplid(X), uprimplcvr(X, Z).
-essnimpl(X, A, V) :- essnimplid(X), uprimpl(X, A, V).
+essnimplcvr(X, Z) :- essnimplid(X,t), pimplcvr(X, Z,t).
+essnimpl(X, A, V) :- essnimplid(X,t), uprimpl(X, A, V).
 
-leftimplid(X) :- uprimplid(X), not essnimplid(X).
-leftimplcvr(X, Z) :- leftimplid(X), uprimplcvr(X, Z).
+leftimplid(X) :- pimplid(X,t), not essnimplid(X,t), query(t).
+leftimplcvr(X, Z) :- leftimplid(X), pimplcvr(X, Z, t), query(t).
 leftimpl(X, A, V) :- leftimplid(X), uprimpl(X, A, V).
 
 #show fullcover/1.
 
+#show essnimplid/2.
 #show essnimplid/1.
 #show essnimplcvr/2.
 #show essnimpl/3.
