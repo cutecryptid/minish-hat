@@ -116,9 +116,11 @@ def main():
     parser = argparse.ArgumentParser(description='Minterm reduction with ASP')
     parser.add_argument('input_sample', metavar='I', type=str,
                         help='route for the minterm text file')
-    parser.add_argument('-m','--minmode', default="none",
+    parser.add_argument('-m','--minmode', default="triplet",
                     choices=['atoms', 'terms', 'atoms-terms', 'subset', 'triplet'],
                     help='formulae minimization method')
+    parser.add_argument('-a', '--all', action='store_true', default=False,
+                    help='enumerate all optimal models')
     args = parser.parse_args()
 
     # Turn minterms into ASP facts
@@ -139,10 +141,7 @@ def main():
     if any(sym.name == "fullcover" for sym in mincover_syms):
         finaldicts += [ essndict ]
     else:
-        if args.minmode == "none":
-            petrick_solutions = solve("petrick", [mincover_facts], [])
-        else:
-            petrick_solutions = solve("petrick", [mincover_facts], ["0"])
+        petrick_solutions = solve("petrick", [mincover_facts], ["0"])
         for idx,petrick_syms in enumerate(petrick_solutions):
             petrick_facts = symbols_to_facts(petrick_syms)
             if any(sym.name == "selectimplid" for sym in petrick_syms):
@@ -191,7 +190,10 @@ def main():
         if asprin:
             with open("./tmp/minfacts.lp", "w") as aspfile:
                 aspfile.write(minimize_facts)
-            out = subprocess.check_output(["asprin", "asp/"+optmode+".lp", "tmp/minfacts.lp", "0"])
+            if args.all:
+                out = subprocess.check_output(["asprin", "asp/"+optmode+".lp", "tmp/minfacts.lp", "0"])
+            else:
+                out = subprocess.check_output(["asprin", "asp/"+optmode+".lp", "tmp/minfacts.lp"])
             strout = out.decode()
             answers = strout.split('Answer:')
             for ans in answers:
@@ -201,9 +203,12 @@ def main():
                     preds = ". ".join(preds.split(" "))+"."
                     minimal_solutions += solve("", [preds], ["0"])
         else:
-            minimal_solutions = solve(optmode, [minimize_facts], ["--opt-mode=optN","-n0"])
-            # The first solution appears two times, so drop it
-            minimal_solutions = minimal_solutions[1:]
+            if args.all:
+                minimal_solutions = solve(optmode, [minimize_facts], ["--opt-mode=optN","-n0"])
+                # The first solution appears two times, so drop it
+                minimal_solutions = minimal_solutions[1:]
+            else:
+                minimal_solutions = solve(optmode, [minimize_facts], [])
 
         # Iterate and print minimized formulae
         for idx,sol in enumerate(minimal_solutions):
