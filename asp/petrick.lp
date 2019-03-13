@@ -10,7 +10,3 @@ selectcvrid(Z) :- selectimplcvr(_,Z).
 
 :- cvrid(Z), not selectcvrid(Z).
 :- selectimplid(X), selectimplid(Y), X<Y, overlapid(X,Y).
-
-#show selectimplid/1.
-#show selectimplcvr/2.
-#show selectimpl/3.

@@ -48,7 +48,3 @@ subtotal(X, Y) :- total(X), partial(Y), 0=#count{ A: m(X, A, V), m(Y, A, W), V!=
                       0=#count{ A: m(X, A, 2), m(Y, A, 0) }.
 
 :- query(t), adj(X,Y,t).
-
-#show uprimplid/1.
-#show uprimpl/3.
-#show uprimplcvr/2.

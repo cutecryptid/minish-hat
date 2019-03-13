@@ -89,26 +89,28 @@ def solve(asp_program, asp_facts, clingo_args):
     return ret
 
 def solve_iter(asp_program, asp_facts):
-    c = clingo.Control()
-    c.add("check", ["k"], "#external query(k).")
-    c.load("./asp/"+asp_program+".lp")
-    for facts in asp_facts:
-        c.add("base", [], facts)
+    prg = clingo.Control([])
+    prg.add("check", ["k"], "#external query(k).")
+    prg.load("./asp/"+asp_program+".lp")
+    for f in asp_facts:
+        prg.add("base", [], f)
 
-    t, ret = 0, []
-    c.ground([("base", [])])
-    while t < 3:
-        c.ground([("step", [t])])
-        c.ground([("check", [t])])
-        c.release_external(clingo.Function("query", [t-1]))
-        c.assign_external(clingo.Function("query", [t]), True)
-        # TODO: First call produces irrelevant info messages, look how to mute this
-        with c.solve(yield_=True) as handle:
-            for m in handle:
-                ret = m.symbols(shown=True)
-            if (handle.get().satisfiable):
-                break
-        t += 1
+    step, handle, ret = 0, None, []
+    while ( step == 0 or not handle.get().satisfiable ):
+        parts = []
+        parts.append(("check", [step]))
+        if step > 0:
+            prg.release_external(clingo.Function("query", [step-1]))
+            parts.append(("step", [step]))
+            prg.cleanup()
+        else:
+            parts.append(("base", []))
+        prg.ground(parts)
+        prg.assign_external(clingo.Function("query", [step]), True)
+        step += 1
+        handle = prg.solve(yield_=True)
+        for m in handle:
+            ret = m.symbols(shown=True)
     return ret
 
 
