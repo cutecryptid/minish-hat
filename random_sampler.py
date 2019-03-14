@@ -12,23 +12,29 @@ def ternary (n):
 
 def main():
     parser = argparse.ArgumentParser(description='Minterm reduction with ASP')
-    parser.add_argument('out_file', metavar='O', type=str,
-                        help='route for the output minterm text file')
     parser.add_argument('atoms', metavar='A', type=int,
                     help='number of atoms of the sample')
     parser.add_argument('size', metavar='S', type=int,
                     help='sample size')
+    parser.add_argument('-o', '--out', metavar='O', type=str,
+                        help='optional route for the output minterm text file')
     args = parser.parse_args()
+
+    if args.out != None:
+        out_file = args.out
+    else:
+        out_file = "./input/rnsample_{0}_{1}.txt".format(args.atoms, args.size)
 
     sample = []
     try:
-        sample = random.sample(range(0, args.atoms**3), args.size)
+        rn = range(0, 3**args.atoms)
+        sample = sorted(random.sample(rn, args.size))
+
+        with open(out_file, "w") as file:
+            for minterm in sample:
+                file.write('%0*d\n' % (args.atoms, int(ternary(minterm))))
     except ValueError:
         print('Sample size exceeded population size.')
-
-    with open(args.out_file, "w") as file:
-        for minterm in sample:
-            file.write('%0*d\n' % (args.atoms, int(ternary(minterm))))
 
 
 if __name__ == "__main__":
