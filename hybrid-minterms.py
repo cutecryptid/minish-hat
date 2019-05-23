@@ -266,7 +266,9 @@ def main():
     if args.verbose == 0 or args.verbose >= 1:
         print("PRIME IMPLICATES WITH TOTAL COVERAGE")
         for k,v in extended_cover_unmarked.items():
-            print("[{0}] : ({1})".format(v['label'], list(v['covers'])))
+            covers = list(v['covers'])
+            label_covers = [init_minterms[frozenset([x])]['label'] for x in covers]
+            print("[{0}] : ({1})".format(v['label'], " ".join(label_covers)))
 
     pre_covered_by = time.time()
     cover_dict = dict()
@@ -284,7 +286,7 @@ def main():
 
     if args.verbose == 0 or args.verbose >= 2:
         print("MINTERMS COVERED BY IMPLICATES")
-        for k,v in cover_dict.items():
+        for k,v in sorted(cover_dict.items()):
             cover = []
             for x in v['covered_by']:
                 for cv in x.values():
@@ -315,7 +317,7 @@ def main():
                     essential_cover = extended_cover_unmarked[ek]['covers']
                     essential_implicates.update({ ek : { 'label' : ev, 'covers':essential_cover } })
                     extended_cover_unmarked[ek]['is_essential'] = True
-                    for minid in list(ek):
+                    for minid in list(essential_cover):
                         cover_dict[frozenset([minid])]['is_used'] = True
         if essential_count == 0:
             break
@@ -342,7 +344,7 @@ def main():
     if fullcover:
         if args.verbose == 0 or args.verbose >= 1:
             print("Achieved full coverage, no need for Petrick")
-        final_labels = [[essential_labels]]
+        final_labels = [essential_labels]
     else:
         prime_left = { k : v for k, v in extended_cover_unmarked.items() if not v['is_essential']}
         if args.verbose == 0 or args.verbose >= 1:
@@ -433,14 +435,6 @@ def main():
     for idx,ssol in enumerate(sorted_solutions):
         print("SOLUTION #{0}".format(idx))
         print(labels_to_rules(ssol))
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     main()
