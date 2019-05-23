@@ -4,13 +4,9 @@
 #program base.
 holds(m(X,A,V), 0):- m(X, A, V).
 covers(X, X, 0) :- m(X, A, V).
-symbol(0;1;2;z;o;x).
 pair(0, 1, z). pair(1, 0, z).
 pair(1, 2, o). pair(2, 1, o).
 pair(z, o, x). pair(o, z, x).
-
-value(V, V) :- symbol(V), V <= 2.
-value(z, 3). value(o, 4). value(x, 5).
 
 %% t > 0
 #program step(t).
@@ -19,20 +15,17 @@ holds(m((X,Y),A,V), t) :- vadj(X,Y,_,_,t-1), holds(m(X,A,V),t-1), holds(m(Y,A,V)
 
 %% t >= 0
 #program check(t).
-id(X,t) :- holds(m(X,A,V),t).
 id(X) :- holds(m(X,A,V),t).
-sumvalue(X, S) :- id(X), S=#sum{ W,A,V : holds(m(X,A,V),_), value(V,W) }.
+zeroes(X, C) :- id(X), C=#count{A: holds(m(X, A, 0), t) }.
 
-adj(X,Y,t) :- id(X,t), id(Y,t), X<Y, sumvalue(X,SX), sumvalue(Y,SY), |SX-SY|=1,
-              #count{A: holds(m(X,A,V),t), holds(m(Y,A,W),t), V!=W}=1.
-
-adjcount(C,t) :- C=#count{ X,Y : adj(X,Y,t) }.
+adj(X,Y,t) :- zeroes(X, CX), zeroes(Y, CY), X<Y, CY-CX<=0,
+                #count{A: holds(m(X,A,V),t), holds(m(Y,A,W),t), V!=W}=1.
 
 vadj(X,Y,A,P,t) :- adj(X,Y,t), holds(m(X,A,V),t), holds(m(Y,A,W),t), pair(V,W,P).
 
 mark(X) :- vadj(X,_,_,P,t), holds(m(X,_,1), t).
 mark(Y) :- vadj(_,Y,_,P,t), holds(m(Y,_,1), t).
-mark(Z) :- vadj(X,Y,A,x,t-1), covers((X,Y),Z,t).
+mark(Z) :- vadj(X,Y,A,P,t-1), P == x, covers((X,Y),Z,t).
 
 covers((X,Y), X, 1) :- id((X,Y)).
 covers((X,Y), Y, 1) :- id((X,Y)).
@@ -58,6 +51,4 @@ total(X) :- id(X), not partial(X).
 subtotal(X, Y) :- total(X), partial(Y), 0=#count{ A: m(X, A, V), m(Y, A, W), V!=2, V!=W },
                       0=#count{ A: m(X, A, 2), m(Y, A, 0) }.
 
-:- query(T), T < 2.
-
-#show adjcount/2.
+:- query(t), adj(X,Y,t).
