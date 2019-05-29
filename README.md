@@ -3,7 +3,7 @@
 ## Usage
 Run ```python minterms.py INPUT_FILE```. Python 3.x and clingo 5.x and asprin are required.
 
-There is an hybrid implementation that leverages ASP for the minimal coverage and performs the pairing with python, you can try it using ```hybrid-minterms.py``` instead. Input files are the same for both scripts.
+There is an hybrid implementation that leverages ASP for the minimal coverage and performs the pairing with python, you can try it using ```bitwise-minterms.py``` instead. Input files are the same for both scripts.
 
 The input file must contain the terms of the function to minimize in their ternary representation, one term per line. See the samples at the provided input folder for reference.
 
