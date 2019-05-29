@@ -33,7 +33,8 @@ def parse_input(file_contents):
             i = get_id(m)
             dict.update({ frozenset([i]) : { 'label' : m, 'mark': False,
                          'weight' : get_label_weight(m),
-                         'adjval' : get_adjval(m) } })
+                         'adjval' : get_adjval(m),
+                         'oct_val' : get_octal(m) } })
     return dict
 
 def get_adjval(label):
@@ -46,34 +47,59 @@ def get_id(label):
 
 def get_similar_marks(position, label, reverse_dict):
     ret = []
-    reg = r"" + label[:position] + r"[012oz]" + label[position+1:]
+    pos = len(label) + position
+    reg = r"" + label[:pos] + r"[012oz]" + label[pos+1:]
     for tlab in reverse_dict.keys():
         if re.search(reg, tlab, re.IGNORECASE):
             ret += [reverse_dict[tlab]]
     return ret
 
-def check_adjacent(labelx, labely):
-    pairs = {
-        ('1', '2') : ('o', 0),
-        ('2', '1') : ('o', 1),
-        ('0', '1') : ('z', 1),
-        ('1', '0') : ('z', 0),
-        ('o', 'z') : ('x', 0),
-        ('z', 'o') : ('x', 0)
+def get_octal(label):
+    translation = {
+        '0' : '1',
+        '1' : '2',
+        '2' : '4',
+        'z' : '3',
+        'o' : '6',
+        'x' : '7',
     }
-    adjcount = 0
-    for i in range(len(labelx)):
-        if (labelx[i], labely[i]) in pairs.keys():
-            r,p = pairs[(labelx[i], labely[i])]
-            ret = (i, r, p)
-            adjcount += 1
-            if adjcount > 1:
-                ret = (-1, None, -1)
-                break
-        elif labelx[i] != labely[i]:
-            ret = (-1, None, -1)
-            break
-    return ret
+    octalstr = ""
+    for a in label:
+        octalstr += translation[a]
+    return int(octalstr, 8)
+
+def get_label_from_octal(octx):
+        translation = {
+            '1' : '0',
+            '2' : '1',
+            '4' : '2',
+            '3' : 'z',
+            '6' : 'o',
+            '7' : 'x',
+        }
+        label = ""
+        for a in oct(octx)[2:]:
+            label += translation[a]
+        return label
+
+def check_adjacent(octx, octy):
+    count_set = 0
+    count_fives = 0
+    res = octx | octy
+    ret_xor = octx ^ octy
+    res_or = res
+    res_xor = ret_xor
+    while (res_or and res_xor):
+        count_set += 1 if (res_xor & 7 > 0) else 0
+        count_fives += 1 if (res_or & 7 == 5) else 0
+        res_or >>= 3
+        res_xor >>= 3
+    dict =  { 'is_valid' : False, 'change_pos': 0, 'oct_val' : None }
+    if count_fives == 0 and count_set == 1:
+        dict['is_valid'] = True
+        dict['change_pos'] = -1 * len(oct(ret_xor)[2:])
+        dict['oct_val'] = res
+    return dict
 
 def mincover_facts(label_cover_dict):
     facts = ""
@@ -163,6 +189,7 @@ def main():
             total_cover = totalize(label)
             total_cover_ids = [ int(lb, 6) for lb in total_cover]
         init_minterms.update( { k : { 'label' : v['label'],  'is_total' : is_total,
+                                'oct_val' : get_octal(v['label']),
                                 'total_cover':  frozenset(sorted(total_cover_ids)) }})
 
     parse_time = time.time()
@@ -211,24 +238,29 @@ def main():
                     .format(len(adj_vals[lw])*len(adj_vals[hw]),lw, hw))
             for idx in adj_vals[lw]:
                 for idy in adj_vals[hw]:
-                    lx = selected_minterms[idx]['label']
-                    ly = selected_minterms[idy]['label']
-                    v = check_adjacent(lx, ly)
-                    if v[0] >= 0:
-                        nlx = lx[:v[0]] + v[1] + lx[v[0]+1:]
+                    octx = selected_minterms[idx]['oct_val']
+                    octy = selected_minterms[idy]['oct_val']
+                    pair_adj_dict = check_adjacent(octx, octy)
+                    if pair_adj_dict['is_valid']:
+                        nlx = get_label_from_octal(pair_adj_dict['oct_val'])
                         nid = frozenset(sorted(list(idx)+list(idy)))
                         input_dict.update({ nid : { 'label' : nlx,
                                      'mark': False,
                                      'weight' : get_label_weight(nlx),
-                                     'adjval' : get_adjval(nlx) } })
+                                     'adjval' : get_adjval(nlx),
+                                     'oct_val' : get_octal(nlx) } })
                         rev_dict.update({ nlx: nid })
-                        if v[1] == 'x':
-                            marked_ids = get_similar_marks(v[0], nlx, rev_dict)
+                        change_index = pair_adj_dict['change_pos']
+                        if nlx[change_index] == 'x':
+                            marked_ids = get_similar_marks(change_index, nlx, rev_dict)
                             for mark in marked_ids:
                                 input_dict[mark]['mark'] = True
                         else:
-                            marked_id = [idx,idy][v[2]]
-                            input_dict[marked_id]['mark'] = True
+                            olx, oly = selected_minterms[idx]['label'], selected_minterms[idy]['label']
+                            if olx[change_index] == '1':
+                                input_dict[idx]['mark'] = True
+                            if oly[change_index] == '1':
+                                input_dict[idy]['mark'] = True
             post_pair_loop = time.time()
             if args.time == 0 or args.time >= 4:
                 print("\tSTEP {0}, [{1},{2}] Pair Time: {3:.5f} s".format(step, lw, hw,
@@ -241,7 +273,7 @@ def main():
                 post_iteration_time-iteration_time))
         iteration_time = time.time()
         step += 1
-    if args.time == 0 or args.time >= 2:
+    if args.time == 0 or args.time >= 1:
         print("Total Pair Time: {0:.5f} s".format(iteration_time-pre_pair_time))
 
     pre_prime = time.time()
