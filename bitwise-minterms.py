@@ -202,6 +202,7 @@ def main():
     post_pair_loop = time.time()
     print("Pair Time: {0:.5f} s".format(post_pair_loop-pre_pair_loop))
 
+    pre_essential = time.time()
     unmarked = { k: dict(v, **{ 'is_essential' : False }) for k, v in minterm_dict.items() if not v['marked'] }
 
     cover_dict = dict()
@@ -239,6 +240,10 @@ def main():
 
     essential_ids = [k for k in essential_implicates.keys()]
 
+    post_essential = time.time()
+    print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
+
+    pre_petrick = time.time()
     if fullcover:
         final_ids = [essential_ids]
     else:
@@ -264,13 +269,41 @@ def main():
                     selected_ids += [int(id)]
             final_ids += [essential_ids + selected_ids]
 
-    for idx,solution in enumerate(final_ids):
-        print("SOLUTION #{0}".format(idx))
+    post_petrick = time.time()
+    print("Petrick Time: {0:.5f} s".format(post_petrick-pre_petrick))
+
+    pre_min = time.time()
+    if len(final_ids) > 1:
+        minimize_facts = ""
+        for idx,ids in enumerate(final_ids):
+            asp = "solution({0}). ".format(idx)
+            for id in ids:
+                for x,a in enumerate(octal_to_label(id)):
+                    asp += "sol(impl(\"{0}\",x{1},{2}), {3}). ".format(id, x, a, idx)
+            minimize_facts += asp
+
+        minimal_solutions = solve('less-atoms', [minimize_facts], [])
+
+        selected_solutions = []
+        for sol in minimal_solutions:
+            for sym in sol:
+                if sym.name == "selectsol":
+                    selected_solution_id = sym.arguments[0].number
+                    selected_solutions += [final_ids[selected_solution_id]]
+    else:
+        selected_solutions = [ final_ids[0] ]
+
+    post_min = time.time()
+    print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
+
+    print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
+    for idx,sol in enumerate(selected_solutions):
+        print("MINIMAL SOLUTION #{0}".format(idx))
         labels = []
-        for id in solution:
+        for id in sol:
             labels += [ octal_to_label(int(id))]
         print(labels_to_rules(labels))
-    
+
 
 
 if __name__ == "__main__":
