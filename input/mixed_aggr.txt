@@ -1,0 +1,5 @@
+# q :- not p.
+# p or not p or q or not q.
+
+0z
+11

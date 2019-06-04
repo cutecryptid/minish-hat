@@ -6,27 +6,36 @@ import time
 import copy
 from itertools import product
 
+#TODO: For lines that have aggregates (o,z,x) expand them, keep the others
 def parse_input(file_contents):
     dict = {}
     for line in file_contents.split('\n'):
         if re.match('^[012ozx]+\s*$', line):
             m = line.strip()
-            i = label_to_octal(m)
-            dict.update({ i : { 'marked': False,
-                         'covers' : frozenset([i]) } })
+            if re.match('[012ozx]*[zox][012ozx]*', line):
+                eids = get_countermodels(m)
+            else:
+                eids = [label_to_octal(m)]
+            for id in eids:
+                dict.update({ id : { 'marked': False,
+                             'covers' : frozenset([id]) } })
     return dict
 
-def totalize(s):
-    #TODO: Can we do this just with octal?
-    keyletters = '21'
-    seq = list(s)
-    indices = [ i for i, c in enumerate(seq) if c in keyletters ]
-    ret = []
-    for t in product(keyletters, repeat=len(indices)):
-        for i, c in zip(indices, t):
-            seq[i] = c
-        ret += [ label_to_octal(''.join(seq)) ]
-    return ret
+def get_countermodels(label):
+    options = {
+        'z': ['0','1'],
+        'o': ['1', '2'],
+        'x': ['0', '1', '2']
+    }
+    combos = [(c,) if c not in options else options[c] for c in label]
+    return (label_to_octal(''.join(o)) for o in product(*combos))
+
+def get_totalize(label):
+    options = {
+        '2': ['1','2']
+    }
+    combos = [(c,) if c not in options else options[c] for c in label]
+    return (label_to_octal(''.join(o)) for o in product(*combos))
 
 def get_adjval(octx):
     weight = { 1: 0, 2: 1, 4: 2,
@@ -106,6 +115,20 @@ def solve(asp_program, asp_facts, clingo_args):
             ret += [m.symbols(shown=True)]
     return ret
 
+def solve_optimal(asp_program, asp_facts, clingo_args):
+    c = clingo.Control(clingo_args + ["--opt-mode=optN"])
+    if asp_program != "":
+        c.load("./asp/"+asp_program+".lp")
+    for facts in asp_facts:
+        c.add("base", [], facts)
+    c.ground([("base", [])])
+    ret = []
+    with c.solve(yield_=True) as handle:
+        for m in handle:
+            if (m.optimality_proven):
+                ret += [m.symbols(shown=True)]
+    return ret
+
 def labels_to_rules(labels):
     terms = []
     for label in labels:
@@ -133,6 +156,12 @@ def main():
     parser = argparse.ArgumentParser(description='Minterm reduction with ASP')
     parser.add_argument('file', nargs='?', type=argparse.FileType('r'),
                         default=sys.stdin, help="TXT File (default: stdin)")
+    parser.add_argument('-hc', '--hybridcover', action='store_true', default=False,
+                        help="Perform mincover in two steps python-ASP instead of all ASP")
+    parser.add_argument('-a', '--all', action='store_true', default=False,
+                        help="Show all minimal solutions instead of a single one")
+    parser.add_argument('-m', '--minmode', choices=['atoms', 'terms'], default='atoms',
+                        help="Minimization method, less atoms by default")
     args = parser.parse_args()
 
     try:
@@ -142,12 +171,10 @@ def main():
         print(exc)
         return 1
 
-    minterm_set = frozenset(minterm_dict.keys())
-
     for k,v in minterm_dict.items():
         label = octal_to_label(k)
         if re.match(r"^[0,2]+$", label):
-            minterm_dict[k]['covers'] = frozenset(totalize(label))
+            minterm_dict[k]['covers'] = frozenset(list(get_totalize(label)))
 
     initial_minterms =  copy.deepcopy(minterm_dict)
 
@@ -205,6 +232,7 @@ def main():
     pre_essential = time.time()
     unmarked = { k: dict(v, **{ 'is_essential' : False }) for k, v in minterm_dict.items() if not v['marked'] }
 
+
     cover_dict = dict()
     for ik, iv in initial_minterms.items():
         for uk, uv in unmarked.items():
@@ -215,39 +243,43 @@ def main():
                 else:
                     cover_dict[ik]['covered_by'] += [ uk ]
 
-    essential_implicates = dict()
-    step = 0
-    fullcover = False
-    initial_minterms_set = frozenset(initial_minterms.keys())
-    while True:
-        essential_count = 0
-        unused_cover_dict = { k : v for k, v in cover_dict.items() if not v['is_used']}
-        if len(unused_cover_dict.items()) == 0:
-            fullcover = True
-            break
-        for ck, cv in unused_cover_dict.items():
-            if len(cv['covered_by']) == 1:
-                essential_count += 1
-                for ek in cv['covered_by']:
-                    essential_cover = unmarked[ek]['covers']
-                    essential_implicates.update({ ek : { 'covers': essential_cover } })
-                    unmarked[ek]['is_essential'] = True
-                    for minid in list(essential_cover & initial_minterms_set):
-                        cover_dict[minid]['is_used'] = True
-        if essential_count == 0:
-            break
-        step += 1
+    if args.hybridcover:
+        essential_implicates = dict()
+        step = 0
+        fullcover = False
+        initial_minterms_set = frozenset(initial_minterms.keys())
+        while True:
+            essential_count = 0
+            unused_cover_dict = { k : v for k, v in cover_dict.items() if not v['is_used']}
+            if len(unused_cover_dict.items()) == 0:
+                fullcover = True
+                break
+            for ck, cv in unused_cover_dict.items():
+                if len(cv['covered_by']) == 1:
+                    essential_count += 1
+                    for ek in cv['covered_by']:
+                        essential_cover = unmarked[ek]['covers']
+                        essential_implicates.update({ ek : { 'covers': essential_cover } })
+                        unmarked[ek]['is_essential'] = True
+                        for minid in list(essential_cover & initial_minterms_set):
+                            cover_dict[minid]['is_used'] = True
+            if essential_count == 0:
+                break
+            step += 1
 
-    essential_ids = [k for k in essential_implicates.keys()]
-
-    post_essential = time.time()
-    print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
+        essential_ids = [k for k in essential_implicates.keys()]
+        post_essential = time.time()
+        print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
 
     pre_petrick = time.time()
-    if fullcover:
+    if args.hybridcover and fullcover:
         final_ids = [essential_ids]
     else:
-        prime_left = { k : v for k, v in unmarked.items() if not v['is_essential']}
+        if args.hybridcover:
+            prime_left = { k : v for k, v in unmarked.items() if not v['is_essential']}
+        else:
+            prime_left = unmarked
+            unused_cover_dict = cover_dict
         minids = set()
         for k in unused_cover_dict.keys():
             minids.add(k)
@@ -259,11 +291,15 @@ def main():
                 id_cover.update( { k : limited_cover } )
 
         petrick_facts = mincover_facts(id_cover)
-        petrick_solutions = solve('petrick_hybrid', [petrick_facts], ["0"])
+        if args.hybridcover:
+            petrick_solutions = solve('petrick_hybrid', [petrick_facts], ["0"])
+        else:
+            petrick_solutions = solve_optimal('min-cover-full', [petrick_facts], [])
+            essential_ids = []
         final_ids = []
         for sol in petrick_solutions:
+            selected_ids = []
             for sym in sol:
-                selected_ids = []
                 if sym.name == "selectid":
                     id = str(sym.arguments[0])[1:-1]
                     selected_ids += [int(id)]
@@ -282,9 +318,12 @@ def main():
                     asp += "sol(impl(\"{0}\",x{1},{2}), {3}). ".format(id, x, a, idx)
             minimize_facts += asp
 
-        minimal_solutions = solve('less-atoms', [minimize_facts], [])
+        print("Minimizing Solutions by minimal number of {0}".format(args.minmode))
+        minimal_solutions = solve_optimal('less-' +args.minmode, [minimize_facts], [])
 
         selected_solutions = []
+        if not args.all:
+            minimal_solutions = [minimal_solutions[0]]
         for sol in minimal_solutions:
             for sym in sol:
                 if sym.name == "selectsol":
