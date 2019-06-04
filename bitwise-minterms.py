@@ -162,6 +162,8 @@ def main():
                         help="Show all minimal solutions instead of a single one")
     parser.add_argument('-m', '--minmode', choices=['atoms', 'terms'], default='atoms',
                         help="Minimization method, less atoms by default")
+    parser.add_argument('-t', '--time', action='store_true', default=False,
+                        help="Show time measures for the different stages")
     args = parser.parse_args()
 
     try:
@@ -178,7 +180,8 @@ def main():
 
     initial_minterms =  copy.deepcopy(minterm_dict)
 
-    pre_pair_loop = time.time()
+    if args.time:
+        pre_pair_loop = time.time()
     adjval_dict = { }
     for k in minterm_dict.keys():
         keyadjval = get_adjval(k)
@@ -226,13 +229,12 @@ def main():
                                     'covers' : newcovers } })
         adjval_dict = new_adjval_dict
 
-    post_pair_loop = time.time()
-    print("Pair Time: {0:.5f} s".format(post_pair_loop-pre_pair_loop))
+    if args.time:
+        post_pair_loop = time.time()
+        print("Pair Time: {0:.5f} s".format(post_pair_loop-pre_pair_loop))
+        pre_essential = time.time()
 
-    pre_essential = time.time()
     unmarked = { k: dict(v, **{ 'is_essential' : False }) for k, v in minterm_dict.items() if not v['marked'] }
-
-
     cover_dict = dict()
     for ik, iv in initial_minterms.items():
         for uk, uv in unmarked.items():
@@ -268,10 +270,12 @@ def main():
             step += 1
 
         essential_ids = [k for k in essential_implicates.keys()]
-        post_essential = time.time()
-        print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
+        if args.time:
+            post_essential = time.time()
+            print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
 
-    pre_petrick = time.time()
+    if args.time:
+        pre_petrick = time.time()
     if args.hybridcover and fullcover:
         final_ids = [essential_ids]
     else:
@@ -305,10 +309,11 @@ def main():
                     selected_ids += [int(id)]
             final_ids += [essential_ids + selected_ids]
 
-    post_petrick = time.time()
-    print("Petrick Time: {0:.5f} s".format(post_petrick-pre_petrick))
+    if args.time:
+        post_petrick = time.time()
+        print("Petrick Time: {0:.5f} s".format(post_petrick-pre_petrick))
+        pre_min = time.time()
 
-    pre_min = time.time()
     if len(final_ids) > 1:
         minimize_facts = ""
         for idx,ids in enumerate(final_ids):
@@ -323,19 +328,26 @@ def main():
 
         selected_solutions = []
         if not args.all:
+            if len(minimal_solutions) > 1:
+                minsolcount = "1+"
             minimal_solutions = [minimal_solutions[0]]
+        else:
+            minsolcount = str(len(minimal_solutions))
         for sol in minimal_solutions:
             for sym in sol:
                 if sym.name == "selectsol":
                     selected_solution_id = sym.arguments[0].number
                     selected_solutions += [final_ids[selected_solution_id]]
     else:
+        minsolcount = "1"
         selected_solutions = [ final_ids[0] ]
 
-    post_min = time.time()
-    print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
+    if args.time:
+        post_min = time.time()
+        print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
+        print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
 
-    print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
+    print("Optimal Minimal Solutions: {0}".format(minsolcount))
     for idx,sol in enumerate(selected_solutions):
         print("MINIMAL SOLUTION #{0}".format(idx))
         labels = []

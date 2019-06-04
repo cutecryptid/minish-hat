@@ -12,7 +12,7 @@ Only a single minimal solution will be specified, to show all of the possible mi
 
 ### Usage Output
 ```
-usage: bitwise-minterms.py [-h] [-hc] [-a] [-m {atoms,terms}] [file]
+usage: bitwise-minterms.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [file]
 
 Minterm reduction with ASP
 
@@ -26,6 +26,7 @@ optional arguments:
   -a, --all             Show all minimal solutions instead of a single one
   -m {atoms,terms}, --minmode {atoms,terms}
                         Minimization method, less atoms by default
+  -t, --time            Show time measures for the different stages
 ```
 
 ## TO DO
