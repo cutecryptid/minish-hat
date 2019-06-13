@@ -72,11 +72,13 @@ def is_total(octx):
 
 def parse_input(file_contents):
     dict = {}
+    have_aggr = False
     for line in file_contents.split('\n'):
         if re.match('^[012ozx]+\s*$', line):
             m = line.strip()
             id = label_to_octal(m)
             if get_weight(id) > 0:
+                have_aggr = True
                 covers = list(get_countermodels(m))
             else:
                 covers = [id]
@@ -90,7 +92,7 @@ def parse_input(file_contents):
                              'covers' : set(covers),
                              'totalcovers' : set(covers+totalcovers)
                              } })
-    return dict
+    return (dict,have_aggr)
 
 def get_totalize(label):
     options = {
@@ -219,10 +221,12 @@ def main():
                         help="Show all minimal solutions instead of a single one")
     parser.add_argument('-m', '--minmode', choices=['atoms', 'terms'], default='atoms',
                         help="Minimization method, less atoms by default")
+    parser.add_argument('-t', '--time', action='store_true', default=False,
+                        help="Show time measures for the different stages")
     args = parser.parse_args()
 
     try:
-        minterm_dict = parse_input(args.file.read())
+        minterm_dict,have_aggr = parse_input(args.file.read())
     except Exception as exc:
         print("error parsing file:", args.file.name)
         print(exc)
@@ -238,47 +242,50 @@ def main():
                 lb = octal_to_label(c)
                 totalcovers = list(get_totalize(lb))
             initial_minterms.update({
-                id : { 'covers' : set(covers+totalcovers)}
+                id : { 'totalcovers' : set(covers+totalcovers)}
             })
 
+    if args.time:
+        pre_pair_loop = time.time()
     adj_count = 1
     exp_count = 1
     step = 0
     while (adj_count+exp_count) > 0:
         exp_count = 0
         adj_count = 0
-        delete_list = []
-        minkeys = [ k for k,v in minterm_dict.items() if not v['marked']]
-        for k1,k2 in combinations(minkeys,2):
-            partial = check_partial_adj(k1,k2)
-            if partial:
-                expanded = set()
-                if get_weight(k1) > 0:
-                    expanded |= minterm_dict[k1]['covers']
-                if get_weight(k2) > 0:
-                    expanded |= minterm_dict[k2]['covers']
-                expanded_list = list(expanded)
-                for ek in expanded_list:
-                    new_add = 0
-                    if not ek in minterm_dict.keys():
-                        new_add += 1
-                        totalcovers = []
-                        if is_total(ek):
-                            label = octal_to_label(ek)
-                            totalcovers = list(get_totalize(label))
-                        minterm_dict.update({ ek : { 'marked': False,
-                                         'adjval' : get_adjval(ek),
-                                         'covers' : set([ek]),
-                                         'totalcovers' : set([ek] + totalcovers) } })
-                    if new_add > 0:
-                        if get_weight(k1) > 0:
-                            delete_list += [k1]
-                        if get_weight(k2) > 0:
-                            delete_list += [k2]
-                    exp_count += new_add
+        if have_aggr:
+            delete_list = []
+            minkeys = [ k for k,v in minterm_dict.items() if not v['marked']]
+            for k1,k2 in combinations(minkeys,2):
+                partial = check_partial_adj(k1,k2)
+                if partial:
+                    expanded = set()
+                    if get_weight(k1) > 0:
+                        expanded |= minterm_dict[k1]['covers']
+                    if get_weight(k2) > 0:
+                        expanded |= minterm_dict[k2]['covers']
+                    expanded_list = list(expanded)
+                    for ek in expanded_list:
+                        new_add = 0
+                        if not ek in minterm_dict.keys():
+                            new_add += 1
+                            totalcovers = []
+                            if is_total(ek):
+                                label = octal_to_label(ek)
+                                totalcovers = list(get_totalize(label))
+                            minterm_dict.update({ ek : { 'marked': False,
+                                             'adjval' : get_adjval(ek),
+                                             'covers' : set([ek]),
+                                             'totalcovers' : set([ek] + totalcovers) } })
+                        if new_add > 0:
+                            if get_weight(k1) > 0:
+                                delete_list += [k1]
+                            if get_weight(k2) > 0:
+                                delete_list += [k2]
+                        exp_count += new_add
 
-        for k in delete_list:
-            minterm_dict.pop(k, None)
+            for k in delete_list:
+                minterm_dict.pop(k, None)
 
         adjval_dict = { }
         for k,v in minterm_dict.items():
@@ -318,17 +325,25 @@ def main():
                         if not result in minterm_dict.keys():
                             newcovers = set.union(minterm_dict[p0]['covers'],
                                             minterm_dict[p1]['covers'])
+                            newtotalcovers = set.union(minterm_dict[p0]['totalcovers'],
+                                            minterm_dict[p1]['totalcovers'])
                             minterm_dict.update({ result: { 'marked' : False,
                                     'adjval' : get_adjval(result),
-                                    'covers' : newcovers } })
+                                    'covers' : newcovers,
+                                    'totalcovers' : newtotalcovers } })
         step += 1
+
+    if args.time:
+        post_pair_loop = time.time()
+        print("Pair Time: {0:.5f} s".format(post_pair_loop-pre_pair_loop))
+        pre_essential = time.time()
 
     unmarked = { k: dict(v, **{ 'is_essential' : False }) for k, v in minterm_dict.items() if not v['marked'] }
 
     cover_dict = dict()
     for ik, iv in initial_minterms.items():
         for uk, uv in unmarked.items():
-            if len(iv['covers'] & uv['covers']):
+            if len(iv['totalcovers'] & uv['totalcovers']):
                 if not ik in cover_dict.keys():
                     cover_dict.update( { ik: { 'covered_by' : [ uk ],
                                 'is_used' : False } } )
@@ -350,8 +365,8 @@ def main():
                 if len(cv['covered_by']) == 1:
                     essential_count += 1
                     for ek in cv['covered_by']:
-                        essential_cover = unmarked[ek]['covers']
-                        essential_implicates.update({ ek : { 'covers': essential_cover } })
+                        essential_cover = unmarked[ek]['totalcovers']
+                        essential_implicates.update({ ek : { 'totalcovers': essential_cover } })
                         unmarked[ek]['is_essential'] = True
                         for minid in list(essential_cover & initial_minterms_set):
                             cover_dict[minid]['is_used'] = True
@@ -360,7 +375,12 @@ def main():
             step += 1
 
         essential_ids = [k for k in essential_implicates.keys()]
+        if args.time:
+            post_essential = time.time()
+            print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
 
+    if args.time:
+        pre_petrick = time.time()
     if args.hybridcover and fullcover:
         final_ids = [essential_ids]
     else:
@@ -375,7 +395,7 @@ def main():
 
         id_cover = {}
         for k,v in prime_left.items():
-            limited_cover = set(v['covers']) & minids
+            limited_cover = set(v['totalcovers']) & minids
             if len(limited_cover) > 0:
                 id_cover.update( { k : limited_cover } )
 
@@ -393,6 +413,11 @@ def main():
                     id = str(sym.arguments[0])[1:-1]
                     selected_ids += [int(id)]
             final_ids += [essential_ids + selected_ids]
+
+    if args.time:
+        post_petrick = time.time()
+        print("Petrick Time: {0:.5f} s".format(post_petrick-pre_petrick))
+        pre_min = time.time()
 
     if len(final_ids) > 1:
         minimize_facts = ""
@@ -421,6 +446,11 @@ def main():
     else:
         minsolcount = "1"
         selected_solutions = [ final_ids[0] ]
+
+    if args.time:
+        post_min = time.time()
+        print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
+        print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
 
     print("Optimal Minimal Solutions: {0}".format(minsolcount))
     for idx,sol in enumerate(selected_solutions):

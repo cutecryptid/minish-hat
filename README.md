@@ -1,7 +1,7 @@
 # Minish HAT: Here-And-There Logic Program and Theories minimization in ASP
 
 ## Usage
-Run ```python minish-countermodels.py INPUT_FILE```. Python 3.x and clingo 5.x.
+Run ```python minish-hat.py INPUT_FILE```. Python 3.x and clingo 5.x.
 Asprin is optional but recommended, as it is just used for complex minimization modes.
 
 The input file must contain the terms of the function to minimize in their ternary representation, one term per line. See the samples at the provided input folder for reference. These terms should be either the countermodels of the logic program/theory or the program rules translated to labels (with ```z=not 2``` and ```o=not 0```).
@@ -10,9 +10,20 @@ The script generates the prime implicates in Python and leverages ASP to do the 
 
 Only a single minimal solution will be specified, to show all of the possible minimal solutions, use the ```--all``` parameter. Minimization method can be specified through the ```-m / --minmode``` parameter.
 
+### Minish-HAT or Minish-Countermodels?
+Minish-HAT is a combined version of the two approaches (aggregates and countermodels)
+that performs better than Minish-Countermodels in the average case when there are
+rule representations containing "not 0"s, "not 2"s and "don't care"s. In the best case
+it can perform an order of magnitude better, while in the worst case it has a bit
+of overhead time because it's not as optimized as Minish-Countermodels when dealing
+with a pure countermodel input (no aggregates in rules).
+
+It is recommended to use Minish-HAT, but you can check if for your problem Minish-Countermodels
+does better.
+
 ### Usage Output
 ```
-usage: minish-countermodels.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [file]
+usage: minish-hat.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [file]
 
 Here-And-There Logic Program and Theories minimization in ASP
 
@@ -32,4 +43,3 @@ optional arguments:
 ## TO DO
 * Input file should be a logic program or theory.
 * Only simple minimizations by atoms and terms are supported, no asprin option to combine or minimal subset yet.
-* Combine CMs and Ruleset scripts by checking input file
