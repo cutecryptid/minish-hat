@@ -1,0 +1,21 @@
+# p :- not q.
+# q :- not p.
+# r :- p.
+# r :- q.
+# p :- r.
+# q :- r.
+# s :- t.
+# t :- u.
+# u :- v.
+# v :- s.
+
+z0xxxxxxx
+0zxxxxxxx
+2xzxxxxxx
+x2zxxxxxx
+zx2xxxxxx
+xz2xxxxxx
+xxxxxz2xx
+xxxxxxz2x
+xxxxxxxz2
+xxxxx2xxz

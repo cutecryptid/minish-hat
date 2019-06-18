@@ -4,7 +4,9 @@
 Run ```python minish-hat.py INPUT_FILE```. Python 3.x and clingo 5.x.
 Asprin is optional but recommended, as it is just used for complex minimization modes.
 
-The input file must contain the terms of the function to minimize in their ternary representation, one term per line. See the samples at the provided input folder for reference. These terms should be either the countermodels of the logic program/theory or the program rules translated to labels (with ```z=not 2``` and ```o=not 0```).
+The input file must contain the terms of the function to minimize either in their ternary representation, one term per line
+or in a logic program format without nesting. See the samples at the provided input folder for reference.
+In ternary representation, the terms should be either the countermodels of the logic program/theory or the program rules translated to labels (with ```z=not 2``` and ```o=not 0```).
 
 The script generates the prime implicates in Python and leverages ASP to do the mincover for all of the generated prime implicates. This behaviour can be altered to let python extract the Essential Implicates first and use ASP to determine the remaining minimal coverage by using the parameter ```-hc/--hybridcover```.
 
@@ -41,5 +43,6 @@ optional arguments:
 ```
 
 ## TO DO
-* Input file should be a logic program or theory.
+* Test input with logic programs and see if it's consistent.
 * Only simple minimizations by atoms and terms are supported, no asprin option to combine or minimal subset yet.
+* Properly test that the minimal solutions are indeed minimal and strongly equivalent to the original program.

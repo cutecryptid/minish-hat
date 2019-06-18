@@ -6,6 +6,24 @@ import time
 import copy
 from itertools import product, combinations, groupby
 
+def rule_to_label(rulevalues, atoms):
+    lb = ""
+    for atom in sorted(atoms):
+        if not atom in rulevalues['atoms']:
+            lb += "x"
+        else:
+            if atom in rulevalues['phead'] and rulevalues['nhead']:
+                lb += '1'
+            elif atom in rulevalues['phead']:
+                lb += 'z'
+            elif atom in rulevalues['nhead']:
+                lb += 'o'
+            elif atom in rulevalues['pbody']:
+                lb += '2'
+            elif atom in rulevalues['nbody']:
+                lb += '0'
+    return lb
+
 def label_to_octal(label):
     translation = {
         '0' : '1',
@@ -69,30 +87,6 @@ def is_total(octx):
         sum += weight[octx & 7]
         octx >>= 3
     return (sum)
-
-def parse_input(file_contents):
-    dict = {}
-    have_aggr = False
-    for line in file_contents.split('\n'):
-        if re.match('^[012ozx]+\s*$', line):
-            m = line.strip()
-            id = label_to_octal(m)
-            if get_weight(id) > 0:
-                have_aggr = True
-                covers = list(get_countermodels(m))
-            else:
-                covers = [id]
-            totalcovers = []
-            for c in covers:
-                if is_total(c):
-                    label = octal_to_label(c)
-                    totalcovers += list(get_totalize(label))
-            dict.update({ id : { 'marked': False,
-                             'adjval' : get_adjval(id),
-                             'covers' : set(covers),
-                             'totalcovers' : set(covers+totalcovers)
-                             } })
-    return (dict,have_aggr)
 
 def get_totalize(label):
     options = {
@@ -188,21 +182,25 @@ def solve_optimal(asp_program, asp_facts, clingo_args):
                 ret += [m.symbols(shown=True)]
     return ret
 
-def labels_to_rules(labels):
+def labels_to_rules(labels, atomset=[]):
     terms = []
     for label in labels:
         head, body = [], []
         for idx,v in enumerate(label):
+            if len(atomset) == 0:
+                atom = "x" + str(idx)
+            else:
+                atom = atomset[idx]
             if v == "0":
-                body += [ "not x" + str(idx) ]
+                body += [ "not " + atom ]
             elif v == "2":
-                body += [ "x" + str(idx) ]
+                body += [ atom ]
             elif v == "o":
-                head += [ "not x" + str(idx) ]
+                head += [ "not " + atom ]
             elif v == "z":
-                head += [ "x" + str(idx) ]
+                head += [ atom ]
             elif v == "1":
-                head += [ "x{0} v not x{0}".format(str(idx)) ]
+                head += [ "{0} v not {0}".format(atom) ]
         term = [ ]
         if len(head) > 0:
             term += [ " v ".join(head) ]
@@ -226,11 +224,120 @@ def main():
     args = parser.parse_args()
 
     try:
-        minterm_dict,have_aggr = parse_input(args.file.read())
+        input_content = args.file.read()
     except Exception as exc:
         print("error parsing file:", args.file.name)
         print(exc)
         return 1
+
+    labels = []
+    atoms = set()
+    have_cms = False
+    have_aggr = False
+    have_rules = False
+    rule_dict = {}
+    rulecount = 1
+
+    for line in input_content.split('\n'):
+        m = line.strip()
+        if re.match('^[012ozx]+$', m):
+            have_cms = True
+            labels += [ m ]
+        if re.match('^[\w;\s]*(?::-)?[\s\w,]*\.$', m):
+            have_rules = True
+            atomset = set()
+            pheadset, nheadset = set(), set()
+            pbodyset, nbodyset = set(), set()
+            parts = line.replace('.', '').split(':-')
+            for hatom in parts[0].split(';'):
+                if len(hatom) > 0:
+                    ha = hatom.strip()
+                    nots = ha.count("not")
+                    if nots == 0:
+                        pheadset.add(ha)
+                    else:
+                        ha = ha.replace('not', '').strip()
+                        if nots == 1:
+                            nheadset.add(ha)
+                        elif nots == 2:
+                            nbodyset.add(ha)
+                        elif nots > 2:
+                            if nots % 2:
+                                nheadset.add(ha)
+                            else:
+                                nbodyset.add(ha)
+                    atomset.add(ha)
+                if len(parts) > 1:
+                    for batom in parts[1].split(','):
+                        if len(batom) > 0:
+                            ba = batom.strip()
+                            nots = ba.count("not")
+                            if nots == 0:
+                                pbodyset.add(ba)
+                            else:
+                                ba = ba.replace('not', '').strip()
+                                if nots == 1:
+                                    nbodyset.add(ba)
+                                elif nots == 2:
+                                    nheadset.add(ba)
+                                elif nots > 2:
+                                    if nots % 2:
+                                        nbodyset.add(ba)
+                                    else:
+                                        nheadset.add(ba)
+                            atomset.add(ba)
+                addrule = True
+                for atom in sorted(atomset):
+                    if ((atom in pheadset and atom in pbodyset) or
+                        (atom in nheadset and atom in nbodyset)):
+                        atomset.remove(atom)
+                        pheadset.remove(atom)
+                        pbodyset.remove(atom)
+                        nheadset.remove(atom)
+                        nbodyset.remove(atom)
+                        print("Removing atom {0} from rule {1}".format(atom, rulecount))
+                        if len(atomset) == 0:
+                            addrule = False
+                            print("Rule {0} has become empty".format(rulecount))
+                    if ((atom in pheadset and atom in nbodyset) or
+                        (atom in nheadset and atom in pbodyset)):
+                            addrule = False
+                            print("Rule {0} is inconsistent".format(rulecount))
+                if addrule:
+                    rule_dict.update({ rulecount : {
+                        'atoms' : atomset,
+                        'phead' : pheadset,
+                        'nhead' : nheadset,
+                        'pbody' : pbodyset,
+                        'nbody' : nbodyset
+                    }})
+                    atoms |= atomset
+                    rulecount += 1
+
+    if have_rules:
+        for rk, rv in rule_dict.items():
+            m = rule_to_label(rv, atoms)
+            labels += [ m ]
+
+    minterm_dict = {}
+
+    for m in labels:
+        id = label_to_octal(m)
+        if get_weight(id) > 0:
+            have_aggr = True
+            covers = list(get_countermodels(m))
+        else:
+            covers = [id]
+        totalcovers = []
+        for c in covers:
+            if is_total(c):
+                label = octal_to_label(c)
+                totalcovers += list(get_totalize(label))
+        minterm_dict.update({ id : { 'marked': False,
+                         'adjval' : get_adjval(id),
+                         'covers' : set(covers),
+                         'totalcovers' : set(covers+totalcovers)
+                         } })
 
     initial_minterms =  dict()
     for mk, mv in minterm_dict.items():
@@ -458,10 +565,11 @@ def main():
         labels = []
         for id in sol:
             labels += [ octal_to_label(int(id))]
-        print(labels_to_rules(labels))
-
-
-
-
+        if have_cms:
+            rules = labels_to_rules(labels)
+        else:
+            rules = labels_to_rules(labels, atomset=sorted(atoms))
+        print(rules)
+        
 if __name__ == "__main__":
     main()
