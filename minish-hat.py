@@ -182,32 +182,66 @@ def solve_optimal(asp_program, asp_facts, clingo_args):
                 ret += [m.symbols(shown=True)]
     return ret
 
-def labels_to_rules(labels, atomset=[]):
+def rules_to_string(rule_dict):
     terms = []
-    for label in labels:
-        head, body = [], []
-        for idx,v in enumerate(label):
-            if len(atomset) == 0:
-                atom = "x" + str(idx)
-            else:
-                atom = atomset[idx]
-            if v == "0":
-                body += [ "not " + atom ]
-            elif v == "2":
-                body += [ atom ]
-            elif v == "o":
-                head += [ "not " + atom ]
-            elif v == "z":
-                head += [ atom ]
-            elif v == "1":
-                head += [ "{0} v not {0}".format(atom) ]
-        term = [ ]
-        if len(head) > 0:
-            term += [ " v ".join(head) ]
-        if len(body) > 0:
-            term += [ " ^ ".join(body) ]
+    for rk,rv in rule_dict.items():
+        term = []
+        if len(rv['phead']) + len(rv['nhead']) > 0:
+            phead = list(rv['phead'])
+            nhead = [ "not " + x for x in list(rv['nhead'])]
+            term += [ " v ".join(phead + nhead) ]
+        if len(rv['pbody']) + len(rv['nbody']) > 0:
+            pbody = list(rv['pbody'])
+            nbody = [ "not " + x for x in list(rv['nbody'])]
+            term += [ " ^ ".join(pbody + nbody) ]
         terms += [ " :- ".join(term) + "." ]
     return "\n".join(terms)
+
+def label_to_ruledict(label, atomset=[]):
+    pheadset, nheadset = set(), set()
+    pbodyset, nbodyset = set(), set()
+    ruleatomset = set()
+    for idx,val in enumerate(label):
+        if len(atomset) == 0:
+            atom = "x" + str(len(label)-idx-1)
+        else:
+            atom = atomset[idx]
+        if val == '0':
+            nbodyset.add(atom)
+        elif val =='1':
+            pheadset.add(atom)
+            nheadset.add(atom)
+        elif val == '2':
+            pbodyset.add(atom)
+        elif val == 'o':
+            nheadset.add(atom)
+        elif val == 'z':
+            pheadset.add(atom)
+        if val != 'x':
+            ruleatomset.add(atom)
+    return ({
+        'atoms' : ruleatomset,
+        'phead' : pheadset,
+        'nhead' : nheadset,
+        'pbody' : pbodyset,
+        'nbody' : nbodyset
+    })
+
+
+def rules_to_asp(rule_dict, program_number):
+    asp = "program({0}).\n".format(program_number)
+    for rk, rv in rule_dict.items():
+        asp += "rule({0}, {1}). ".format(program_number, rk)
+        for atom in rv['phead']:
+            asp += "phead({0}, {1}, '{2}'). ".format(program_number, rk, atom)
+        for atom in rv['nhead']:
+            asp += "nhead({0}, {1}, '{2}'). ".format(program_number, rk, atom)
+        for atom in rv['pbody']:
+            asp += "pbody({0}, {1}, '{2}'). ".format(program_number, rk, atom)
+        for atom in rv['nbody']:
+            asp += "nbody({0}, {1}, '{2}'). ".format(program_number, rk, atom)
+        asp += "\n"
+    return asp
 
 def main():
     parser = argparse.ArgumentParser(description='Here-And-There Logic Program and Theories minimization in ASP')
@@ -221,6 +255,8 @@ def main():
                         help="Minimization method, less atoms by default")
     parser.add_argument('-t', '--time', action='store_true', default=False,
                         help="Show time measures for the different stages")
+    parser.add_argument('-ts', '--test', action='store_true', default=False,
+                        help="Perform Subsum and Equivalence tests on minimal results")
     args = parser.parse_args()
 
     try:
@@ -240,14 +276,18 @@ def main():
 
     for line in input_content.split('\n'):
         m = line.strip()
+        atomset = set()
+        pheadset, nheadset = set(), set()
+        pbodyset, nbodyset = set(), set()
+        addrule = False
         if re.match('^[012ozx]+$', m):
+            addrule = True
             have_cms = True
             labels += [ m ]
+            rule = label_to_ruledict(m, atomset=[])
         if re.match('^[\w;\s]*(?::-)?[\s\w,]*\.$', m):
+            addrule = True
             have_rules = True
-            atomset = set()
-            pheadset, nheadset = set(), set()
-            pbodyset, nbodyset = set(), set()
             parts = line.replace('.', '').split(':-')
             for hatom in parts[0].split(';'):
                 if len(hatom) > 0:
@@ -286,7 +326,6 @@ def main():
                                     else:
                                         nheadset.add(ba)
                             atomset.add(ba)
-                addrule = True
                 for atom in sorted(atomset):
                     if ((atom in pheadset and atom in pbodyset) or
                         (atom in nheadset and atom in nbodyset)):
@@ -295,24 +334,22 @@ def main():
                         pbodyset.remove(atom)
                         nheadset.remove(atom)
                         nbodyset.remove(atom)
-                        print("Removing atom {0} from rule {1}".format(atom, rulecount))
                         if len(atomset) == 0:
                             addrule = False
-                            print("Rule {0} has become empty".format(rulecount))
                     if ((atom in pheadset and atom in nbodyset) or
                         (atom in nheadset and atom in pbodyset)):
                             addrule = False
-                            print("Rule {0} is inconsistent".format(rulecount))
-                if addrule:
-                    rule_dict.update({ rulecount : {
-                        'atoms' : atomset,
-                        'phead' : pheadset,
-                        'nhead' : nheadset,
-                        'pbody' : pbodyset,
-                        'nbody' : nbodyset
-                    }})
-                    atoms |= atomset
-                    rulecount += 1
+                rule = {
+                    'atoms' : atomset,
+                    'phead' : pheadset,
+                    'nhead' : nheadset,
+                    'pbody' : pbodyset,
+                    'nbody' : nbodyset
+                }
+        if addrule:
+            rule_dict.update({ rulecount : rule })
+            atoms |= atomset
+            rulecount += 1
 
     if have_rules:
         for rk, rv in rule_dict.items():
@@ -320,7 +357,6 @@ def main():
             labels += [ m ]
 
     minterm_dict = {}
-
     for m in labels:
         id = label_to_octal(m)
         if get_weight(id) > 0:
@@ -559,17 +595,63 @@ def main():
         print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
         print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
 
+    base_program = rules_to_asp(rule_dict, 1)
+    if args.test:
+        models_p1 = solve('test_strongeq', [base_program], ["0"])
     print("Optimal Minimal Solutions: {0}".format(minsolcount))
+    acum_error_smaller = 0
+    acum_error_noteq = 0
     for idx,sol in enumerate(selected_solutions):
         print("MINIMAL SOLUTION #{0}".format(idx))
         labels = []
+        rules = dict()
         for id in sol:
             labels += [ octal_to_label(int(id))]
-        if have_cms:
-            rules = labels_to_rules(labels)
+        for jdx,lb in enumerate(labels):
+            rules.update({jdx+1 : label_to_ruledict(lb, atomset=sorted(atoms))})
+        min_program = rules_to_asp(rules, idx+2)
+        if args.test:
+            cnt, notsuper = 0, 0
+            test_sol = solve('test_subprogram', [base_program, min_program], [])
+            for sym in test_sol[0]:
+                if sym.name == 'cntrules':
+                    cnt += 1
+                    cntargs = sym.arguments
+                    print("RULE {0} subsums BASE PROGRAM'S RULE {1}".format(cntargs[1].number, cntargs[3].number))
+                elif sym.name == 'notsuper':
+                    notsuper += 1
+                    notsuperargs = sym.arguments
+                    print("RULE {0} doesn't subsum any rule of P1".format(notsuperargs[1].number))
+            if notsuper == 0:
+                print("[SUBSUM TEST] OK")
+            else:
+                print("[SUBSUM TEST] ERROR")
+
+            models_pmin = solve('test_strongeq', [min_program], ["0"])
+            partcount = 0
+            for m in models_p1:
+                if m in models_pmin:
+                    partcount += 1
+                    print("MODEL {0} is also in the minimal program models".format(m))
+                else:
+                    print("MODEL {0} is not in the minimal program models".format(m))
+            if partcount == len(models_p1):
+                print("[STRONG EQ TEST] OK")
+            else:
+                print("[STRONG EQ TEST] ERROR")
+            acum_error_noteq += abs(partcount - len(models_p1))
+            acum_error_smaller += notsuper
+        print(rules_to_string(rules))
+    if args.test:
+        if acum_error_smaller == 0:
+            print("[TEST RESULT] All solutions are smaller")
         else:
-            rules = labels_to_rules(labels, atomset=sorted(atoms))
-        print(rules)
-        
+            print("[TEST RESULT] There are {0} solutions that are not smaller".format(acum_error_smaller))
+        if acum_error_noteq == 0:
+            print("[TEST RESULT] All solutions are strongly equivalent")
+        else:
+            print("[TEST RESULT] There are {0} solutions that are not strongly equivalent".format(acum_error_noteq))
+
+
 if __name__ == "__main__":
     main()
