@@ -430,6 +430,10 @@ def main():
             for k in delete_list:
                 minterm_dict.pop(k, None)
 
+        if len(minterm_dict.keys()) == 0:
+            print("Program has no fundamental rules")
+            sys.exit()
+
         adjval_dict = { }
         for k,v in minterm_dict.items():
             if not v['marked']:
