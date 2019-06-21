@@ -25,7 +25,7 @@ does better.
 
 ### Usage Output
 ```
-usage: minish-hat.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [file]
+usage: minish-hat.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [-ts] [file]
 
 Here-And-There Logic Program and Theories minimization in ASP
 
@@ -40,6 +40,8 @@ optional arguments:
   -m {atoms,terms}, --minmode {atoms,terms}
                         Minimization method, less atoms by default
   -t, --time            Show time measures for the different stages
+  -ts, --test           Perform Subsum and Equivalence tests on minimal
+                        results
 ```
 
 ## TO DO
