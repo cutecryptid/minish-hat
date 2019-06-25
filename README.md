@@ -45,6 +45,5 @@ optional arguments:
 ```
 
 ## TO DO
-* Test input with logic programs and see if it's consistent.
 * Only simple minimizations by atoms and terms are supported, no asprin option to combine or minimal subset yet.
 * Properly test that the minimal solutions are indeed minimal and strongly equivalent to the original program.

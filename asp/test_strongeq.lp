@@ -1,55 +1,64 @@
-base(atom(P)) :- phead(_,_,P).
-base(atom(P)) :- nhead(_,_,P).
-base(atom(P)) :- pbody(_,_,P).
-base(atom(P)) :- nbody(_,_,P).
+% Extract atoms from rules
+base(Pr, atom(P)) :- phead(Pr,_,P).
+base(Pr, atom(P)) :- nhead(Pr,_,P).
+base(Pr, atom(P)) :- pbody(Pr,_,P).
+base(Pr, atom(P)) :- nbody(Pr,_,P).
 
-phead(R, P) :- phead(_,R,P).
-nhead(R, P) :- nhead(_,R,P).
-pbody(R, P) :- pbody(_,R,P).
-nbody(R, P) :- nbody(_,R,P).
+% Each base atom has a prime counterpart
+prime(Pr, atom(Pb)) :- base(Pr, atom(Pb)).
 
-prime(atom(Pb)) :- base(atom(Pb)).
+% Each program rule is a base rule and has a prime counterpart
+base(Pr, rule(R)) :- rule(Pr, R).
+prime(Pr, rule(Rb)) :- base(Pr, rule(Rb)).
 
-{ holds(base(atom(P))) } :- base(atom(P)).
-{ holds(prime(atom(Pb))) } :- prime(atom(Pb)).
+% There is a test rule (generated rules) for each base and prime rule
+grule(Pr, base(rule(R))) :- base(Pr, rule(R)).
+grule(Pr, prime(rule(R))) :- prime(Pr, rule(R)).
 
+% Base rules use base atoms as the original rules
+gphead(Pr, base(rule(R)), base(atom(A))) :- phead(Pr, R, A).
+gnhead(Pr, base(rule(R)), base(atom(A))) :- nhead(Pr, R, A).
+gpbody(Pr, base(rule(R)), base(atom(A))) :- pbody(Pr, R, A).
+gnbody(Pr, base(rule(R)), base(atom(A))) :- nbody(Pr, R, A).
+
+% Prime rules use prime atoms in positive parts and base atoms in negative parts
+gphead(Pr, prime(rule(R)), prime(atom(A))) :- phead(Pr, R, A).
+gnhead(Pr, prime(rule(R)), base(atom(A))) :- nhead(Pr, R, A).
+gpbody(Pr, prime(rule(R)), prime(atom(A))) :- pbody(Pr, R, A).
+gnbody(Pr, prime(rule(R)), base(atom(A))) :- nbody(Pr, R, A).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Select atom candidates for model
+{ holds(base(atom(P))) } :- program(Pr), base(Pr, atom(P)).
+{ holds(prime(atom(Pb))) } :- program(Pr), prime(Pr, atom(Pb)).
+
+% If prime atom is selected then base atom must be selected too.
 holds(base(atom(P))) :- holds(prime(atom(P))).
 
-base(rule(R)) :- rule(Pr, R).
-prime(rule(Rb)) :- base(rule(Rb)).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-xrule(base(rule(R))) :- base(rule(R)).
-xrule(prime(rule(R))) :- prime(rule(R)).
+% Test if selected atom candidates verify head parts of g-rules
+sathead(Pr, R) :- gphead(Pr, R, L), holds(L).
+sathead(Pr, R) :- gnhead(Pr, R, L), not holds(L).
 
-xphead(base(rule(R)), base(atom(A))) :- phead(R, A).
-xnhead(base(rule(R)), base(atom(A))) :- nhead(R, A).
-xpbody(base(rule(R)), base(atom(A))) :- pbody(R, A).
-xnbody(base(rule(R)), base(atom(A))) :- nbody(R, A).
+% Test if selected atom doesn't unsatisfy any body part
+unsatbody(Pr, R) :- gpbody(Pr, R, L), not holds(L).
+unsatbody(Pr, R) :- gnbody(Pr, R, L), holds(L).
 
-xphead(prime(rule(Rb)), prime(atom(Ab))) :-
-  xphead(base(rule(R)), base(atom(A))), prime(atom(Ab)), prime(rule(Rb)).
-xnhead(prime(rule(Rb)), base(atom(A))) :-
-  xnhead(base(rule(R)), base(atom(A))), prime(rule(Rb)).
-xpbody(prime(rule(Rb)), prime(atom(Ab))) :-
-  xpbody(base(rule(R)), base(atom(A))), prime(atom(Ab)), prime(rule(Rb)).
-xnbody(prime(rule(Rb)), base(atom(A))) :-
-  xnhead(base(rule(R)), base(atom(A))), prime(rule(Rb)).
+% Rule satisfaction if head is satisfied or neither head nor body are satisfied
+% Classical Implication Truth Table (Head v ~Body)
+satisfies(Pr, R) :- sathead(Pr,R).
+satisfies(Pr, R) :- unsatbody(Pr,R).
 
-% TODO: Check the holds that satisfy all of the xrule using xphead, xnhead, etc.
-% Head is OR-checked so a single correct value satisfies head
-% Body is AND-checked so every value must be correct for holds to satisfy the body
+% Forbid models that do not satisfy every g-rule
+:- grule(Pr, R), not satisfies(Pr, R).
 
-sathead(R) :- xphead(R, L), holds(L).
-sathead(R) :- xnhead(R, L), not holds(L).
-
-unsatbody(R) :- xpbody(R, L), not holds(L).
-unsatbody(R) :- xnbody(R, L), holds(L).
-
-satbody(R) :- xrule(R), not unsatbody(R).
-
-satisfies(R) :- xrule(R), sathead(R).
-satisfies(R) :- xrule(R), satbody(R).
-
-:- xrule(R), not satisfies(R).
+%% Run this and externally check that there is no model in Pr1 that doesn't
+%% belong to Pr2 and viceversa? How to check INTERNALLY?
+%% Maybe just generate the models facts and cross them
+%% model(Program, NumModel, ModelAtom)
+%% Checking the empty model can be tricky, just model(Program, NumModel, empty)?
+%% Is this better than checking it by hand on python? Try both I GUESS.
 
 #show holds/1.
