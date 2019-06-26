@@ -46,4 +46,4 @@ optional arguments:
 
 ## TO DO
 * Only simple minimizations by atoms and terms are supported, no asprin option to combine or minimal subset yet.
-* Properly test that the minimal solutions are indeed minimal and strongly equivalent to the original program.
+* Fix either generation of solutions or correctly implement the test of subsumption.
