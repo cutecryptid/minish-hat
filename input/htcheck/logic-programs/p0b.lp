@@ -1,1 +1,1 @@
-q :- not p, not q.
+q :- not p, q.

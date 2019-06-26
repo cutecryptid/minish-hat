@@ -329,11 +329,14 @@ def main():
                 for atom in sorted(atomset):
                     if ((atom in pheadset and atom in pbodyset) or
                         (atom in nheadset and atom in nbodyset)):
-                        atomset.remove(atom)
-                        pheadset.remove(atom)
-                        pbodyset.remove(atom)
-                        nheadset.remove(atom)
-                        nbodyset.remove(atom)
+                        try:
+                            atomset.remove(atom)
+                            pheadset.remove(atom)
+                            pbodyset.remove(atom)
+                            nheadset.remove(atom)
+                            nbodyset.remove(atom)
+                        except:
+                            pass
                         if len(atomset) == 0:
                             addrule = False
                     if ((atom in pheadset and atom in nbodyset) or
@@ -601,7 +604,8 @@ def main():
 
     base_program = rules_to_asp(rule_dict, 1)
     if args.test:
-        models_p1 = solve('test_strongeq', [base_program], ["0"])
+        models_p1 = solve('test_models', [base_program], ["0"])
+        models_p1 = [sorted(m) for m in models_p1]
     print("Optimal Minimal Solutions: {0}".format(minsolcount))
     acum_error_smaller = 0
     acum_error_noteq = 0
@@ -615,6 +619,8 @@ def main():
             rules.update({jdx+1 : label_to_ruledict(lb, atomset=sorted(atoms))})
         min_program = rules_to_asp(rules, idx+2)
         if args.test:
+            models_pmin = solve('test_models', [min_program], ["0"])
+            models_pmin = [sorted(m) for m in models_pmin]
             cnt, notsuper = 0, 0
             test_sol = solve('test_subprogram', [base_program, min_program], [])
             for sym in test_sol[0]:
@@ -630,21 +636,25 @@ def main():
                 print("[SUBSUM TEST] OK")
             else:
                 print("[SUBSUM TEST] ERROR")
-
-            models_pmin = solve('test_strongeq', [min_program], ["0"])
+                acum_error_smaller += 1
             partcount = 0
             for m in models_p1:
                 if m in models_pmin:
-                    partcount += 1
                     print("MODEL {0} is also in the minimal program models".format(m))
                 else:
                     print("MODEL {0} is not in the minimal program models".format(m))
-            if partcount == len(models_p1):
+                    partcount += 1
+            for m in models_pmin:
+                if m in models_p1:
+                    print("MODEL {0} is also in the original program models".format(m))
+                else:
+                    print("MODEL {0} is not in the original program models".format(m))
+                    partcount += 1
+            if partcount == 0:
                 print("[STRONG EQ TEST] OK")
             else:
                 print("[STRONG EQ TEST] ERROR")
-            acum_error_noteq += abs(partcount - len(models_p1))
-            acum_error_smaller += notsuper
+                acum_error_noteq += 1
         print(rules_to_string(rules))
     if args.test:
         if acum_error_smaller == 0:
