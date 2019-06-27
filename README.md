@@ -25,7 +25,8 @@ does better.
 
 ### Usage Output
 ```
-usage: minish-hat.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [-ts] [file]
+usage: minish-hat.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [-te] [-ts] [-ct]
+                     [file]
 
 Here-And-There Logic Program and Theories minimization in ASP
 
@@ -40,10 +41,11 @@ optional arguments:
   -m {atoms,terms}, --minmode {atoms,terms}
                         Minimization method, less atoms by default
   -t, --time            Show time measures for the different stages
-  -ts, --test           Perform Subsum and Equivalence tests on minimal
-                        results
+  -te, --testeq         Perform Strong Equivalence tests on minimal results
+  -ts, --testsub        Perform Subsumption tests on minimal results
+  -ct, --covertable     Prints Prime Implicate Cover table
 ```
 
 ## TO DO
 * Only simple minimizations by atoms and terms are supported, no asprin option to combine or minimal subset yet.
-* Fix either generation of solutions or correctly implement the test of subsumption.
+* Merge Countermodels version into main program (Countermodels version doesn't support tests nor Cover Table options)

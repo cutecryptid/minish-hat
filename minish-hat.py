@@ -4,6 +4,7 @@ import re
 import sys
 import time
 import copy
+import math
 from itertools import product, combinations, groupby
 
 def rule_to_label(rulevalues, atoms):
@@ -146,6 +147,13 @@ def check_adjacent(octx, octy):
         dict['oct_val'] = res
     return dict
 
+def check_simpler(octx, octy):
+    res = octx | octy
+    ret_xor = octx ^ octy
+    print(octal_to_label(octx), octal_to_label(octy), oct(ret_xor))
+
+    return False
+
 def mincover_facts(label_cover_dict):
     facts = ""
     for k,v in label_cover_dict.items():
@@ -227,6 +235,31 @@ def label_to_ruledict(label, atomset=[]):
         'nbody' : nbodyset
     })
 
+def cover_table(cover_dict):
+    coveredby = [p['covered_by'] for p in cover_dict.values()]
+    primes = set()
+    for c in coveredby:
+        primes |= set(c)
+    primelb = [ octal_to_label(p) for p in sorted(primes) ]
+    width = len(primelb[0])
+    tablestr = " "*width + "  "
+    for lb in primelb:
+        tablestr += lb + "  "
+    tablestr += "\n"
+    for k in sorted(cover_dict.keys()):
+        tablestr += octal_to_label(k) + "  "
+        for p in sorted(primes):
+            if p in cover_dict[k]['covered_by']:
+                tablestr += " "*(width//2) + "x"
+                if width%2:
+                    tablestr += " "*(width//2)
+                else:
+                    tablestr += " "*((width//2)-1)
+                tablestr += "  "
+            else:
+                tablestr += " "*width + "  "
+        tablestr += "\n"
+    return tablestr
 
 def rules_to_asp(rule_dict, program_number):
     asp = "program({0}).\n".format(program_number)
@@ -255,8 +288,12 @@ def main():
                         help="Minimization method, less atoms by default")
     parser.add_argument('-t', '--time', action='store_true', default=False,
                         help="Show time measures for the different stages")
-    parser.add_argument('-ts', '--test', action='store_true', default=False,
-                        help="Perform Subsum and Equivalence tests on minimal results")
+    parser.add_argument('-te', '--testeq', action='store_true', default=False,
+                        help="Perform Strong Equivalence tests on minimal results")
+    parser.add_argument('-ts', '--testsub', action='store_true', default=False,
+                        help="Perform Subsumption tests on minimal results")
+    parser.add_argument('-ct', '--covertable', action='store_true', default=False,
+                        help="Prints Prime Implicate Cover table ")
     args = parser.parse_args()
 
     try:
@@ -493,12 +530,16 @@ def main():
     cover_dict = dict()
     for ik, iv in initial_minterms.items():
         for uk, uv in unmarked.items():
-            if len(iv['totalcovers'] & uv['totalcovers']):
+            if ik in uv['covers']:
                 if not ik in cover_dict.keys():
                     cover_dict.update( { ik: { 'covered_by' : [ uk ],
                                 'is_used' : False } } )
                 else:
                     cover_dict[ik]['covered_by'] += [ uk ]
+
+    if args.covertable:
+        print("COVER TABLE")
+        print(cover_table(cover_dict))
 
     if args.hybridcover:
         essential_implicates = dict()
@@ -603,12 +644,14 @@ def main():
         print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
 
     base_program = rules_to_asp(rule_dict, 1)
-    if args.test:
+    if args.testeq:
         models_p1 = solve('test_models', [base_program], ["0"])
         models_p1 = [sorted(m) for m in models_p1]
     print("Optimal Minimal Solutions: {0}".format(minsolcount))
     acum_error_smaller = 0
     acum_error_noteq = 0
+    acum_warning_smaller = 0
+    initial_labels = labels
     for idx,sol in enumerate(selected_solutions):
         print("MINIMAL SOLUTION #{0}".format(idx))
         labels = []
@@ -618,9 +661,7 @@ def main():
         for jdx,lb in enumerate(labels):
             rules.update({jdx+1 : label_to_ruledict(lb, atomset=sorted(atoms))})
         min_program = rules_to_asp(rules, idx+2)
-        if args.test:
-            models_pmin = solve('test_models', [min_program], ["0"])
-            models_pmin = [sorted(m) for m in models_pmin]
+        if args.testsub:
             cnt, notsuper = 0, 0
             test_sol = solve('test_subprogram', [base_program, min_program], [])
             for sym in test_sol[0]:
@@ -635,8 +676,32 @@ def main():
             if notsuper == 0:
                 print("[SUBSUM TEST] OK")
             else:
-                print("[SUBSUM TEST] ERROR")
-                acum_error_smaller += 1
+                suberror = False
+                warned = False
+                notsimpler = 0
+                # Check that the rulecount is the same and not greater, at least
+                # the program is sintactically simpler to give it a soft pass
+                simpler_test_sol = solve('test_simpler', [base_program, min_program], [])
+                for sym in simpler_test_sol[0]:
+                    if sym.name == 'cntrules':
+                        cnt += 1
+                        cntargs = sym.arguments
+                    elif sym.name == 'notsuper':
+                        notsimpler += 1
+                        notsuperargs = sym.arguments
+                    if notsimpler == 0:
+                        warned = True
+                    else:
+                        suberror = True
+                if suberror:
+                    print("[SUBSUM TEST] ERROR")
+                    acum_error_smaller += 1
+                elif warned:
+                    print("[SUBSUM TEST] WARNING: Program is equal in size, but sintactically simpler")
+                    acum_warning_smaller += 1
+        if args.testeq:
+            models_pmin = solve('test_models', [min_program], ["0"])
+            models_pmin = [sorted(m) for m in models_pmin]
             partcount = 0
             for m in models_p1:
                 if m in models_pmin:
@@ -656,11 +721,15 @@ def main():
                 print("[STRONG EQ TEST] ERROR")
                 acum_error_noteq += 1
         print(rules_to_string(rules))
-    if args.test:
+    if args.testsub:
         if acum_error_smaller == 0:
-            print("[TEST RESULT] All solutions are smaller")
+            if acum_warning_smaller == 0:
+                print("[TEST RESULT] All solutions are smaller")
+            else:
+                print("[TEST RESULT] All solutions are smaller or equal but sintactically simpler")
         else:
             print("[TEST RESULT] There are {0} solutions that are not smaller".format(acum_error_smaller))
+    if args.testeq:
         if acum_error_noteq == 0:
             print("[TEST RESULT] All solutions are strongly equivalent")
         else:

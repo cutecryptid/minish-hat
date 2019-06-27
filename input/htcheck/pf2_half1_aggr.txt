@@ -1,0 +1,9 @@
+#a :- p.
+#b :- not p.
+#p :- not not p.
+
+# abpq
+
+zx2
+xz0
+xx1
