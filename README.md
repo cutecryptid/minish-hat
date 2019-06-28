@@ -34,4 +34,4 @@ optional arguments:
 
 ## TO DO
 * Only simple minimizations by atoms and terms are supported, no asprin option to combine or minimal subset yet.
-* Switch mode automatically in the absence of aggregates to perform the vanilla algorithm.
+* Add pre-processing to split programs into subprograms and solve them independently.
