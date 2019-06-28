@@ -310,6 +310,7 @@ def main():
     have_rules = False
     rule_dict = {}
     rulecount = 1
+    explicit_atoms = set()
 
     for line in input_content.split('\n'):
         m = line.strip()
@@ -317,12 +318,14 @@ def main():
         pheadset, nheadset = set(), set()
         pbodyset, nbodyset = set(), set()
         addrule = False
-        if re.match('^[012ozx]+$', m):
+        if re.match('^\/\w+\/$', m):
+            explicit_atoms = set(m[1:-1])
+        if re.match('^[012ozx]+$', m) and not have_rules:
             addrule = True
             have_cms = True
             labels += [ m ]
-            rule = label_to_ruledict(m, atomset=[])
-        if re.match('^[\w;\s]*(?::-)?[\s\w,]*\.$', m):
+            rule = label_to_ruledict(m, atomset=sorted(explicit_atoms))
+        if re.match('^[\w;\s]*(?::-)?[\s\w,]*\.$', m) and not have_cms:
             addrule = True
             have_rules = True
             parts = line.replace('.', '').split(':-')
@@ -390,6 +393,9 @@ def main():
             rule_dict.update({ rulecount : rule })
             atoms |= atomset
             rulecount += 1
+
+    if len(explicit_atoms) > 0 and not have_rules:
+        atoms = explicit_atoms
 
     if have_rules:
         for rk, rv in rule_dict.items():
