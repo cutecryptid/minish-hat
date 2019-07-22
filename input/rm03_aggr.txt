@@ -1,0 +1,10 @@
+% a :- not b.
+% a; b; not b.
+% p :- a, not b.
+% p :- a, b.
+
+/abp/
+z0x
+z1x
+20z
+22z

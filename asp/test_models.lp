@@ -1,8 +1,5 @@
 % Extract atoms from rules
-base(Pr, atom(P)) :- phead(Pr,_,P).
-base(Pr, atom(P)) :- nhead(Pr,_,P).
-base(Pr, atom(P)) :- pbody(Pr,_,P).
-base(Pr, atom(P)) :- nbody(Pr,_,P).
+base(Pr, atom(P)) :- program(Pr), sigatom(P).
 
 % Each base atom has a prime counterpart
 prime(Pr, atom(Pb)) :- base(Pr, atom(Pb)).
@@ -61,4 +58,5 @@ satisfies(Pr, R) :- unsatbody(Pr,R).
 %% Checking the empty model can be tricky, just model(Program, NumModel, empty)?
 %% Is this better than checking it by hand on python? Try both I GUESS.
 
+#show unsatisfies/2.
 #show holds/1.

@@ -1,0 +1,8 @@
+% a; b.
+% p :- a, not b.
+% p :- a, b.
+
+/abp/
+zzx
+20z
+22z

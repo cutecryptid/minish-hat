@@ -13,7 +13,7 @@ def rule_to_label(rulevalues, atoms):
         if not atom in rulevalues['atoms']:
             lb += "x"
         else:
-            if atom in rulevalues['phead'] and rulevalues['nhead']:
+            if atom in rulevalues['phead'] and atom in rulevalues['nhead']:
                 lb += '1'
             elif atom in rulevalues['phead']:
                 lb += 'z'
@@ -63,8 +63,8 @@ def get_countermodels(label):
     return (label_to_octal(''.join(o)) for o in product(*combos))
 
 def get_adjval(octx):
-    weight = { 1: 0, 2: 1, 4: 2,
-                3: 4, 6: 5, 7: 7 }
+    weight = { 1: 1, 2: 0, 4: 1,
+                3: 2, 6: 3, 7: 6 }
     sum = 0
     while octx:
         sum += weight[octx & 7]
@@ -100,33 +100,28 @@ def check_partial_adj(p0, p1):
     or_ret = p0 | p1
     and_ret = p0 & p1
     xor_ret = p0 ^ p1
-    mask = 0
-    comp_mask = 0
-    pos = 0
+    ret = 0
     a = p0
     b = p1
-    and_ret_cp = and_ret
-    or_ret_cp = or_ret
-    while a or b or and_ret_cp:
-        ret = 0
-        if (and_ret_cp & 7 == 0) and ((or_ret_cp & 7) in (3,6)):
-            ret = 7
-        elif (and_ret_cp & 7 == 2) and a&7 != b&7 and a&7 in (3,6) and b&7 in (3,6):
-            ret = 7
-        mask += ret * (8 ** pos)
-        comp_mask += (7-ret) * (8 ** pos)
-        pos += 1
-        and_ret_cp >>= 3
-        or_ret_cp >>= 3
+    eq_count = 0
+    adj_count = 0
+    comp_count = 0
+    oct_len = max(len(oct(a)), len(oct(b))) - 2
+    while a or b or and_ret:
+        if (a & 7 == b & 7):
+            eq_count += 1
+        elif ((b & 7 == and_ret & 7) and (a & 7 == or_ret & 7)):
+            comp_count += 1
+        elif ((and_ret & 7 == 0) and (xor_ret & 7 != 5)):
+            adj_count += 1
+        elif ((and_ret & 7 == 2) and (or_ret & 7 == 7) and (xor_ret & 7 == 5)):
+            adj_count += 1
+        or_ret >>= 3
+        xor_ret >>= 3
+        and_ret >>= 3
         a >>= 3
         b >>= 3
-    count = 0
-    masked_xor = xor_ret & comp_mask
-    mask_cp = mask
-    while mask_cp:
-        count += 1 if (mask_cp & 7 == 7) else 0
-        mask_cp >>= 3
-    return mask > 0 and count == 1 and masked_xor != 0
+    return (comp_count >= 1) and (adj_count == 1) and (comp_count + eq_count + adj_count == oct_len)
 
 def check_adjacent(octx, octy):
     count_set = 0
@@ -141,7 +136,7 @@ def check_adjacent(octx, octy):
         res_or >>= 3
         res_xor >>= 3
     dict =  { 'is_valid' : False, 'change_pos': 0, 'oct_val' : None }
-    if count_fives == 0 and count_set == 1:
+    if count_fives == 0 and count_set == 1 and (octx != res and octy != res):
         dict['is_valid'] = True
         dict['change_pos'] = -1 * len(oct(ret_xor)[2:])
         dict['oct_val'] = res
@@ -193,16 +188,19 @@ def solve_optimal(asp_program, asp_facts, clingo_args):
 def rules_to_string(rule_dict):
     terms = []
     for rk,rv in rule_dict.items():
-        term = []
+        termh = ""
+        termb = ""
         if len(rv['phead']) + len(rv['nhead']) > 0:
             phead = list(rv['phead'])
             nhead = [ "not " + x for x in list(rv['nhead'])]
-            term += [ " v ".join(phead + nhead) ]
+            termh += " v ".join(phead + nhead)
         if len(rv['pbody']) + len(rv['nbody']) > 0:
             pbody = list(rv['pbody'])
             nbody = [ "not " + x for x in list(rv['nbody'])]
-            term += [ " ^ ".join(pbody + nbody) ]
-        terms += [ " :- ".join(term) + "." ]
+            termb += ":- " + " ^ ".join(pbody + nbody)
+        if len(termh) > 0 and len(termb) > 0:
+            termh += " "
+        terms += [ termh + termb + "."]
     return "\n".join(terms)
 
 def label_to_ruledict(label, atomset=[]):
@@ -480,6 +478,7 @@ def main():
             print("Program has no fundamental rules")
             sys.exit()
 
+        #TODO: Fix Adj value since now (z, 2) and (o, 0)
         adjval_dict = { }
         for k,v in minterm_dict.items():
             if not v['marked']:
@@ -491,39 +490,46 @@ def main():
 
         sorted_adjval = sorted(adjval_dict)
         len_sorted_adjval = len(adjval_dict)-1
-        for x in range(len_sorted_adjval):
-            if (sorted_adjval[x+1]-sorted_adjval[x]) == 1:
-                leftminterms = adjval_dict[sorted_adjval[x]]
-                rightminterms = adjval_dict[sorted_adjval[x+1]]
-                for p0, p1 in product(leftminterms, rightminterms):
-                    adj = check_adjacent(p0, p1)
-                    if adj['is_valid']:
-                        result = adj['oct_val']
-                        keyadjval = get_adjval(result)
-                        ch_pos = adj['change_pos']
-                        if oct(result)[ch_pos] == '7':
-                            lenres = len(oct(result))
-                            octmask = '0o' + '7'*(lenres-2)
-                            breakpos = lenres + ch_pos
-                            octmask = int(octmask[:breakpos] + '0' + octmask[breakpos+1:],8)
-                            for k in minterm_dict.keys():
-                                if (octmask & k == octmask & result) and (k != result):
-                                    minterm_dict[k]['marked'] = True
-                        else:
-                            if oct(p0)[adj['change_pos']] == '2':
-                                minterm_dict[p0]['marked'] = True
-                            if oct(p1)[adj['change_pos']] == '2':
-                                minterm_dict[p1]['marked'] = True
-                        adj_count += 1
-                        if not result in minterm_dict.keys():
-                            newcovers = set.union(minterm_dict[p0]['covers'],
-                                            minterm_dict[p1]['covers'])
-                            newtotalcovers = set.union(minterm_dict[p0]['totalcovers'],
-                                            minterm_dict[p1]['totalcovers'])
-                            minterm_dict.update({ result: { 'marked' : False,
-                                    'adjval' : get_adjval(result),
-                                    'covers' : newcovers,
-                                    'totalcovers' : newtotalcovers } })
+
+        valid_pairs = []
+        for (p0, p1) in product(sorted_adjval, repeat=2):
+            dif = p1 - p0
+            if dif > 0 and dif < 3:
+                valid_pairs += [(p0,p1)]
+
+        for (l,r) in valid_pairs:
+            leftminterms = adjval_dict[l]
+            rightminterms = adjval_dict[r]
+
+            for p0, p1 in product(leftminterms, rightminterms):
+                adj = check_adjacent(p0, p1)
+                if adj['is_valid']:
+                    result = adj['oct_val']
+                    keyadjval = get_adjval(result)
+                    ch_pos = adj['change_pos']
+                    if oct(result)[ch_pos] == '7':
+                        lenres = len(oct(result))
+                        octmask = '0o' + '7'*(lenres-2)
+                        breakpos = lenres + ch_pos
+                        octmask = int(octmask[:breakpos] + '0' + octmask[breakpos+1:],8)
+                        for k in minterm_dict.keys():
+                            if (octmask & k == octmask & result) and (k != result):
+                                minterm_dict[k]['marked'] = True
+                    else:
+                        if oct(p0)[adj['change_pos']] == '2':
+                            minterm_dict[p0]['marked'] = True
+                        if oct(p1)[adj['change_pos']] == '2':
+                            minterm_dict[p1]['marked'] = True
+                    adj_count += 1
+                    if not result in minterm_dict.keys():
+                        newcovers = set.union(minterm_dict[p0]['covers'],
+                                        minterm_dict[p1]['covers'])
+                        newtotalcovers = set.union(minterm_dict[p0]['totalcovers'],
+                                        minterm_dict[p1]['totalcovers'])
+                        minterm_dict.update({ result: { 'marked' : False,
+                                'adjval' : get_adjval(result),
+                                'covers' : newcovers,
+                                'totalcovers' : newtotalcovers } })
         step += 1
 
     if args.time:
@@ -649,9 +655,13 @@ def main():
         print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
         print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
 
+    atomfacts = ""
+    for a in sorted(atoms):
+        atomfacts += "sigatom('{0}'). ".format(a)
     base_program = rules_to_asp(rule_dict, 1)
     if args.testeq:
-        models_p1 = solve('test_models', [base_program], ["0"])
+        print(base_program, atomfacts)
+        models_p1 = solve('test_models', [base_program, atomfacts], ["0"])
         models_p1 = [sorted(m) for m in models_p1]
     print("Optimal Minimal Solutions: {0}".format(minsolcount))
     acum_error_smaller = 0
@@ -706,7 +716,7 @@ def main():
                     print("[SUBSUM TEST] WARNING: Program is equal in size, but sintactically simpler")
                     acum_warning_smaller += 1
         if args.testeq:
-            models_pmin = solve('test_models', [min_program], ["0"])
+            models_pmin = solve('test_models', [min_program, atomfacts], ["0"])
             models_pmin = [sorted(m) for m in models_pmin]
             partcount = 0
             for m in models_p1:
