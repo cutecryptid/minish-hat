@@ -402,6 +402,8 @@ def main(arguments):
             m = rule_to_label(rv, atoms)
             labels += [ m ]
 
+    labelcount = len(labels)
+
     minterm_dict = {}
     for m in labels:
         id = label_to_octal(m)
@@ -762,6 +764,9 @@ def main(arguments):
         statsdict = {
             "errorsub" : acum_error_smaller,
             "erroreq"  : acum_error_noteq,
+            "atoms"    : len(atoms),
+            "rules"    : labelcount,
+            "time"     : post_min-pre_pair_loop,
         }
         return statsdict
 

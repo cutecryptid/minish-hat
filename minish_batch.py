@@ -18,6 +18,7 @@ def main(arguments):
     suberrorcases = []
     eqerror = 0
     eqerrorcases = []
+    timestats = { "nrules" : {}, "natoms" : {} }
     files = [x for x in os.listdir(args.directory) if x.endswith(".lp") or x.endswith(".txt")]
     for i,f in enumerate(files):
         print('-'*40)
@@ -36,6 +37,14 @@ def main(arguments):
             if stats['erroreq'] != 0:
                 eqerror += 1
                 eqerrorcases += [i]
+            if not stats['rules'] in timestats['nrules'].keys():
+                timestats['nrules'].update({ stats['rules'] : [stats['time']] })
+            else:
+                timestats['nrules'][stats['rules']] += [stats['time']]
+            if not stats['atoms'] in timestats['natoms'].keys():
+                timestats['natoms'].update({ stats['atoms'] : [stats['time']] })
+            else:
+                timestats['natoms'][stats['atoms']] += [stats['time']]
     nfiles = len(files)
 
     restr = ""
@@ -61,6 +70,9 @@ def main(arguments):
     outlog.close()
 
     print(restr)
+
+    #TODO: Average times for atoms and rules and display somehow
+    #      Maybe tables, maybe plot them, maybe export a csv
 
 
 if __name__ == "__main__":
