@@ -1,7 +1,7 @@
 # Minish HAT: Here-And-There Logic Program and Theories minimization in ASP
 
 ## Usage
-Run ```python minish-hat.py INPUT_FILE```. Python 3.x and clingo 5.x.
+Run ```python minish_hat.py INPUT_FILE```. Python 3.x and clingo 5.x are rquired.
 Asprin is optional but recommended, as it is just used for complex minimization modes.
 
 The input file must contain the terms of the function to minimize either in their ternary representation, one term per line or in a logic program format without nesting.  
@@ -11,7 +11,8 @@ In any case, see the samples at the provided input folder for reference.
 
 ### Usage Output
 ```
-usage: minish-hat.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [-te] [-ts] [-ct]
+usage: minish_hat.py [-h] [-hc] [-a] [-m {atoms,terms}] [-t] [-te] [-ts] [-ct]
+                     [-vt]
                      [file]
 
 Here-And-There Logic Program and Theories minimization in ASP
@@ -30,7 +31,15 @@ optional arguments:
   -te, --testeq         Perform Strong Equivalence tests on minimal results
   -ts, --testsub        Perform Subsumption tests on minimal results
   -ct, --covertable     Prints Prime Implicate Cover table
+  -vt, --verbosetests   Makes Test Output more verbose
 ```
+
+### Batch Mode
+Run ```python minish_batch.py INPUT_DIRECTORY```.
+
+Batch mode works by calling the single-file script on each file of the specified directory, by default it generates ```minish.log``` file on the same directory as the script. See the usage help for more options. Clingo errors are not supressed in batch mode, but you can always redirect stderr to null to supress them.
+Output log contains an entry for each file, time stats, subsumption and strong equivalence tests output and the minimal version of the program. The script shows general stats when finished, these same stats appear at the end of the output log.
+
 
 ## TO DO
 * Only simple minimizations by atoms and terms are supported, no asprin option to combine or minimal subset yet.

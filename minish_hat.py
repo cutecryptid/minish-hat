@@ -274,7 +274,7 @@ def rules_to_asp(rule_dict, program_number):
         asp += "\n"
     return asp
 
-def main():
+def main(arguments):
     parser = argparse.ArgumentParser(description='Here-And-There Logic Program and Theories minimization in ASP')
     parser.add_argument('file', nargs='?', type=argparse.FileType('r'),
                         default=sys.stdin, help="TXT File (default: stdin)")
@@ -291,8 +291,10 @@ def main():
     parser.add_argument('-ts', '--testsub', action='store_true', default=False,
                         help="Perform Subsumption tests on minimal results")
     parser.add_argument('-ct', '--covertable', action='store_true', default=False,
-                        help="Prints Prime Implicate Cover table ")
-    args = parser.parse_args()
+                        help="Prints Prime Implicate Cover table")
+    parser.add_argument('-vt', '--verbosetests', action='store_true', default=False,
+                        help="Makes Test Output more verbose")
+    args = parser.parse_args(arguments)
 
     try:
         input_content = args.file.read()
@@ -474,9 +476,11 @@ def main():
             for k in delete_list:
                 minterm_dict.pop(k, None)
 
+        somerules = True
         if len(minterm_dict.keys()) == 0:
             print("Program has no fundamental rules")
-            sys.exit()
+            somerules = False
+            break
 
         #TODO: Fix Adj value since now (z, 2) and (o, 0)
         adjval_dict = { }
@@ -532,225 +536,235 @@ def main():
                                 'totalcovers' : newtotalcovers } })
         step += 1
 
-    if args.time:
-        post_pair_loop = time.time()
-        print("Pair Time: {0:.5f} s".format(post_pair_loop-pre_pair_loop))
-        pre_essential = time.time()
-
-    unmarked = { k: dict(v, **{ 'is_essential' : False }) for k, v in minterm_dict.items() if not v['marked'] }
-
-    cover_dict = dict()
-    for ik, iv in initial_minterms.items():
-        for uk, uv in unmarked.items():
-            if ik in uv['covers']:
-                if not ik in cover_dict.keys():
-                    cover_dict.update( { ik: { 'covered_by' : [ uk ],
-                                'is_used' : False } } )
-                else:
-                    cover_dict[ik]['covered_by'] += [ uk ]
-
-    if args.covertable:
-        print("COVER TABLE")
-        print(cover_table(cover_dict))
-
-    if args.hybridcover:
-        essential_implicates = dict()
-        step = 0
-        fullcover = False
-        initial_minterms_set = frozenset(initial_minterms.keys())
-        while True:
-            essential_count = 0
-            unused_cover_dict = { k : v for k, v in cover_dict.items() if not v['is_used']}
-            if len(unused_cover_dict.items()) == 0:
-                fullcover = True
-                break
-            for ck, cv in unused_cover_dict.items():
-                if len(cv['covered_by']) == 1:
-                    essential_count += 1
-                    for ek in cv['covered_by']:
-                        essential_cover = unmarked[ek]['totalcovers']
-                        essential_implicates.update({ ek : { 'totalcovers': essential_cover } })
-                        unmarked[ek]['is_essential'] = True
-                        for minid in list(essential_cover & initial_minterms_set):
-                            cover_dict[minid]['is_used'] = True
-            if essential_count == 0:
-                break
-            step += 1
-
-        essential_ids = [k for k in essential_implicates.keys()]
+    if somerules:
         if args.time:
-            post_essential = time.time()
-            print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
+            post_pair_loop = time.time()
+            print("Pair Time: {0:.5f} s".format(post_pair_loop-pre_pair_loop))
+            pre_essential = time.time()
 
-    if args.time:
-        pre_petrick = time.time()
-    if args.hybridcover and fullcover:
-        final_ids = [essential_ids]
-    else:
+        unmarked = { k: dict(v, **{ 'is_essential' : False }) for k, v in minterm_dict.items() if not v['marked'] }
+
+        cover_dict = dict()
+        for ik, iv in initial_minterms.items():
+            for uk, uv in unmarked.items():
+                if ik in uv['covers']:
+                    if not ik in cover_dict.keys():
+                        cover_dict.update( { ik: { 'covered_by' : [ uk ],
+                                    'is_used' : False } } )
+                    else:
+                        cover_dict[ik]['covered_by'] += [ uk ]
+
+        if args.covertable:
+            print("COVER TABLE")
+            print(cover_table(cover_dict))
+
         if args.hybridcover:
-            prime_left = { k : v for k, v in unmarked.items() if not v['is_essential']}
+            essential_implicates = dict()
+            step = 0
+            fullcover = False
+            initial_minterms_set = frozenset(initial_minterms.keys())
+            while True:
+                essential_count = 0
+                unused_cover_dict = { k : v for k, v in cover_dict.items() if not v['is_used']}
+                if len(unused_cover_dict.items()) == 0:
+                    fullcover = True
+                    break
+                for ck, cv in unused_cover_dict.items():
+                    if len(cv['covered_by']) == 1:
+                        essential_count += 1
+                        for ek in cv['covered_by']:
+                            essential_cover = unmarked[ek]['totalcovers']
+                            essential_implicates.update({ ek : { 'totalcovers': essential_cover } })
+                            unmarked[ek]['is_essential'] = True
+                            for minid in list(essential_cover & initial_minterms_set):
+                                cover_dict[minid]['is_used'] = True
+                if essential_count == 0:
+                    break
+                step += 1
+
+            essential_ids = [k for k in essential_implicates.keys()]
+            if args.time:
+                post_essential = time.time()
+                print("Essential Extraction Time: {0:.5f} s".format(post_essential-pre_essential))
+
+        if args.time:
+            pre_petrick = time.time()
+        if args.hybridcover and fullcover:
+            final_ids = [essential_ids]
         else:
-            prime_left = unmarked
-            unused_cover_dict = cover_dict
-        minids = set()
-        for k in unused_cover_dict.keys():
-            minids.add(k)
-
-        id_cover = {}
-        for k,v in prime_left.items():
-            limited_cover = set(v['totalcovers']) & minids
-            if len(limited_cover) > 0:
-                id_cover.update( { k : limited_cover } )
-
-        petrick_facts = mincover_facts(id_cover)
-        if args.hybridcover:
-            petrick_solutions = solve('petrick_hybrid', [petrick_facts], ["0"])
-        else:
-            petrick_solutions = solve_optimal('min-cover-full', [petrick_facts], [])
-            essential_ids = []
-        final_ids = []
-        for sol in petrick_solutions:
-            selected_ids = []
-            for sym in sol:
-                if sym.name == "selectid":
-                    id = str(sym.arguments[0])[1:-1]
-                    selected_ids += [int(id)]
-            final_ids += [essential_ids + selected_ids]
-
-    if args.time:
-        post_petrick = time.time()
-        print("Petrick Time: {0:.5f} s".format(post_petrick-pre_petrick))
-        pre_min = time.time()
-
-    if len(final_ids) > 1:
-        minimize_facts = ""
-        for idx,ids in enumerate(final_ids):
-            asp = "solution({0}). ".format(idx)
-            for id in ids:
-                for x,a in enumerate(octal_to_label(id)):
-                    asp += "sol(impl(\"{0}\",x{1},{2}), {3}). ".format(id, x, a, idx)
-            minimize_facts += asp
-
-        print("Minimizing Solutions by minimal number of {0}".format(args.minmode))
-        minimal_solutions = solve_optimal('less-' +args.minmode, [minimize_facts], [])
-
-        selected_solutions = []
-        if not args.all:
-            if len(minimal_solutions) > 1:
-                minsolcount = "1+"
-            minimal_solutions = [minimal_solutions[0]]
-        else:
-            minsolcount = str(len(minimal_solutions))
-        for sol in minimal_solutions:
-            for sym in sol:
-                if sym.name == "selectsol":
-                    selected_solution_id = sym.arguments[0].number
-                    selected_solutions += [final_ids[selected_solution_id]]
-    else:
-        minsolcount = "1"
-        selected_solutions = [ final_ids[0] ]
-
-    if args.time:
-        post_min = time.time()
-        print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
-        print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
-
-    atomfacts = ""
-    for a in sorted(atoms):
-        atomfacts += "sigatom('{0}'). ".format(a)
-    base_program = rules_to_asp(rule_dict, 1)
-    if args.testeq:
-        print(base_program, atomfacts)
-        models_p1 = solve('test_models', [base_program, atomfacts], ["0"])
-        models_p1 = [sorted(m) for m in models_p1]
-    print("Optimal Minimal Solutions: {0}".format(minsolcount))
-    acum_error_smaller = 0
-    acum_error_noteq = 0
-    acum_warning_smaller = 0
-    initial_labels = labels
-    for idx,sol in enumerate(selected_solutions):
-        print("MINIMAL SOLUTION #{0}".format(idx))
-        labels = []
-        rules = dict()
-        for id in sol:
-            labels += [ octal_to_label(int(id))]
-        for jdx,lb in enumerate(labels):
-            rules.update({jdx+1 : label_to_ruledict(lb, atomset=sorted(atoms))})
-        min_program = rules_to_asp(rules, idx+2)
-        if args.testsub:
-            cnt, notsuper = 0, 0
-            test_sol = solve('test_subprogram', [base_program, min_program], [])
-            for sym in test_sol[0]:
-                if sym.name == 'cntrules':
-                    cnt += 1
-                    cntargs = sym.arguments
-                    print("RULE {0} subsums BASE PROGRAM'S RULE {1}".format(cntargs[1].number, cntargs[3].number))
-                elif sym.name == 'notsuper':
-                    notsuper += 1
-                    notsuperargs = sym.arguments
-                    print("RULE {0} doesn't subsum any rule of P1".format(notsuperargs[1].number))
-            if notsuper == 0:
-                print("[SUBSUM TEST] OK")
+            if args.hybridcover:
+                prime_left = { k : v for k, v in unmarked.items() if not v['is_essential']}
             else:
-                suberror = False
-                warned = False
-                notsimpler = 0
-                # Check that the rulecount is the same and not greater, at least
-                # the program is sintactically simpler to give it a soft pass
-                simpler_test_sol = solve('test_simpler', [base_program, min_program], [])
-                for sym in simpler_test_sol[0]:
+                prime_left = unmarked
+                unused_cover_dict = cover_dict
+            minids = set()
+            for k in unused_cover_dict.keys():
+                minids.add(k)
+
+            id_cover = {}
+            for k,v in prime_left.items():
+                limited_cover = set(v['totalcovers']) & minids
+                if len(limited_cover) > 0:
+                    id_cover.update( { k : limited_cover } )
+
+            petrick_facts = mincover_facts(id_cover)
+            if args.hybridcover:
+                petrick_solutions = solve('petrick_hybrid', [petrick_facts], ["0"])
+            else:
+                petrick_solutions = solve_optimal('min-cover-full', [petrick_facts], [])
+                essential_ids = []
+            final_ids = []
+            for sol in petrick_solutions:
+                selected_ids = []
+                for sym in sol:
+                    if sym.name == "selectid":
+                        id = str(sym.arguments[0])[1:-1]
+                        selected_ids += [int(id)]
+                final_ids += [essential_ids + selected_ids]
+
+        if args.time:
+            post_petrick = time.time()
+            print("Petrick Time: {0:.5f} s".format(post_petrick-pre_petrick))
+            pre_min = time.time()
+
+        if len(final_ids) > 1:
+            minimize_facts = ""
+            for idx,ids in enumerate(final_ids):
+                asp = "solution({0}). ".format(idx)
+                for id in ids:
+                    for x,a in enumerate(octal_to_label(id)):
+                        asp += "sol(impl(\"{0}\",x{1},{2}), {3}). ".format(id, x, a, idx)
+                minimize_facts += asp
+
+            #print("Minimizing Solutions by minimal number of {0}".format(args.minmode))
+            minimal_solutions = solve_optimal('less-' +args.minmode, [minimize_facts], [])
+
+            selected_solutions = []
+            if not args.all:
+                if len(minimal_solutions) > 1:
+                    minsolcount = "1+"
+                minimal_solutions = [minimal_solutions[0]]
+            else:
+                minsolcount = str(len(minimal_solutions))
+            for sol in minimal_solutions:
+                for sym in sol:
+                    if sym.name == "selectsol":
+                        selected_solution_id = sym.arguments[0].number
+                        selected_solutions += [final_ids[selected_solution_id]]
+        else:
+            minsolcount = "1"
+            selected_solutions = [ final_ids[0] ]
+
+        if args.time:
+            post_min = time.time()
+            print("Minimal Solution: {0:.5f} s".format(post_min-pre_min))
+            print("Total Exec Time: {0:.5f} s".format(post_min-pre_pair_loop))
+            print("")
+
+        atomfacts = ""
+        for a in sorted(atoms):
+            atomfacts += "sigatom('{0}'). ".format(a)
+        base_program = rules_to_asp(rule_dict, 1)
+        if args.testeq:
+            models_p1 = solve('test_models', [base_program, atomfacts], ["0"])
+            models_p1 = [sorted(m) for m in models_p1]
+        print("Optimal Minimal Solutions: {0}".format(minsolcount))
+        acum_error_smaller = 0
+        acum_error_noteq = 0
+        acum_warning_smaller = 0
+        initial_labels = labels
+        for idx,sol in enumerate(selected_solutions):
+            print("MINIMAL SOLUTION #{0}".format(idx))
+            labels = []
+            rules = dict()
+            for id in sol:
+                labels += [ octal_to_label(int(id))]
+            for jdx,lb in enumerate(labels):
+                rules.update({jdx+1 : label_to_ruledict(lb, atomset=sorted(atoms))})
+            min_program = rules_to_asp(rules, idx+2)
+            print(rules_to_string(rules))
+            if args.testsub:
+                cnt, notsuper = 0, 0
+                test_sol = solve('test_subprogram', [base_program, min_program], [])
+                for sym in test_sol[0]:
                     if sym.name == 'cntrules':
                         cnt += 1
                         cntargs = sym.arguments
+                        if args.verbosetests:
+                            print("RULE {0} subsums BASE PROGRAM'S RULE {1}".format(cntargs[1].number, cntargs[3].number))
                     elif sym.name == 'notsuper':
-                        notsimpler += 1
+                        notsuper += 1
                         notsuperargs = sym.arguments
-                    if notsimpler == 0:
-                        warned = True
-                    else:
-                        suberror = True
-                if suberror:
-                    print("[SUBSUM TEST] ERROR")
-                    acum_error_smaller += 1
-                elif warned:
-                    print("[SUBSUM TEST] WARNING: Program is equal in size, but sintactically simpler")
-                    acum_warning_smaller += 1
+                        if args.verbosetests:
+                            print("RULE {0} doesn't subsum any rule of P1".format(notsuperargs[1].number))
+                if notsuper == 0:
+                    print("[SUBSUM TEST] OK")
+                else:
+                    suberror = False
+                    warned = False
+                    notsimpler = 0
+                    # Check that the rulecount is the same and not greater, at least
+                    # the program is sintactically simpler to give it a soft pass
+                    simpler_test_sol = solve('test_simpler', [base_program, min_program], [])
+                    for sym in simpler_test_sol[0]:
+                        if sym.name == 'cntrules':
+                            cnt += 1
+                            cntargs = sym.arguments
+                        elif sym.name == 'notsuper':
+                            notsimpler += 1
+                            notsuperargs = sym.arguments
+                        if notsimpler == 0:
+                            warned = True
+                        else:
+                            suberror = True
+                    if suberror:
+                        print("[SUBSUM TEST] ERROR")
+                        acum_error_smaller += 1
+                    elif warned:
+                        print("[SUBSUM TEST] WARNING: Program is equal in size, but sintactically simpler")
+                        acum_warning_smaller += 1
+            if args.testeq:
+                models_pmin = solve('test_models', [min_program, atomfacts], ["0"])
+                models_pmin = [sorted(m) for m in models_pmin]
+                partcount = 0
+                for m in models_p1:
+                    if args.verbosetests:
+                        if m in models_pmin:
+                            print("MODEL {0} is also in the minimal program models".format(m))
+                        else:
+                            print("MODEL {0} is not in the minimal program models".format(m))
+                        partcount += 1
+                for m in models_pmin:
+                    if args.verbosetests:
+                        if m in models_p1:
+                            print("MODEL {0} is also in the original program models".format(m))
+                        else:
+                            print("MODEL {0} is not in the original program models".format(m))
+                        partcount += 1
+                if partcount == 0:
+                    print("[STRONG EQ TEST] OK")
+                else:
+                    print("[STRONG EQ TEST] ERROR")
+                    acum_error_noteq += 1
+        if args.testsub:
+            if acum_error_smaller == 0:
+                if acum_warning_smaller == 0:
+                    print("[TEST RESULT] All solutions are smaller")
+                else:
+                    print("[TEST RESULT] All solutions are smaller or equal but sintactically simpler")
+            else:
+                print("[TEST RESULT] There are {0} solutions that are not smaller".format(acum_error_smaller))
         if args.testeq:
-            models_pmin = solve('test_models', [min_program, atomfacts], ["0"])
-            models_pmin = [sorted(m) for m in models_pmin]
-            partcount = 0
-            for m in models_p1:
-                if m in models_pmin:
-                    print("MODEL {0} is also in the minimal program models".format(m))
-                else:
-                    print("MODEL {0} is not in the minimal program models".format(m))
-                    partcount += 1
-            for m in models_pmin:
-                if m in models_p1:
-                    print("MODEL {0} is also in the original program models".format(m))
-                else:
-                    print("MODEL {0} is not in the original program models".format(m))
-                    partcount += 1
-            if partcount == 0:
-                print("[STRONG EQ TEST] OK")
+            if acum_error_noteq == 0:
+                print("[TEST RESULT] All solutions are strongly equivalent")
             else:
-                print("[STRONG EQ TEST] ERROR")
-                acum_error_noteq += 1
-        print(rules_to_string(rules))
-    if args.testsub:
-        if acum_error_smaller == 0:
-            if acum_warning_smaller == 0:
-                print("[TEST RESULT] All solutions are smaller")
-            else:
-                print("[TEST RESULT] All solutions are smaller or equal but sintactically simpler")
-        else:
-            print("[TEST RESULT] There are {0} solutions that are not smaller".format(acum_error_smaller))
-    if args.testeq:
-        if acum_error_noteq == 0:
-            print("[TEST RESULT] All solutions are strongly equivalent")
-        else:
-            print("[TEST RESULT] There are {0} solutions that are not strongly equivalent".format(acum_error_noteq))
-
+                print("[TEST RESULT] There are {0} solutions that are not strongly equivalent".format(acum_error_noteq))
+        statsdict = {
+            "errorsub" : acum_error_smaller,
+            "erroreq"  : acum_error_noteq,
+        }
+        return statsdict
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1:])
